@@ -37,5 +37,11 @@
     "headline": "Something on our end isn't working.",
     "lead": "We've been notified. If urgent, email us directly.",
     "emailLabel": "hello@jakartabc.com"
+  },
+  "insights": {
+    "eyebrow": "INSIGHTS",
+    "headline": "Editorial on Indonesian FDI, with citations.",
+    "lead": "Long-form articles on regulations, sectors, and operational realities. No SEO listicles.",
+    "empty": "No articles yet. Subscribe via the footer to be notified when we publish."
   }
 }
