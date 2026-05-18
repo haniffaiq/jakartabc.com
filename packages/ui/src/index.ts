@@ -27,3 +27,4 @@ export {
   type TimelineStep,
 } from './components/EditorialTimeline'
 export { PricingTable, type PricingRow, type PricingTableProps } from './components/PricingTable'
+export { Hero, type HeroAction, type HeroLinkProps, type HeroProps } from './components/Hero'
