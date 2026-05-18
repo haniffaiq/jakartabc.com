@@ -18,7 +18,10 @@ export function LangToggle({ current, onChange, className }: LangToggleProps) {
       type="button"
       onClick={() => onChange(next)}
       aria-label={`Switch to ${next === 'id' ? 'Indonesian' : 'English'}`}
-      className={cn('text-eyebrow uppercase tracking-[0.08em]', className)}
+      className={cn(
+        'text-eyebrow uppercase tracking-[0.08em] hover:text-ink-900 active:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600',
+        className,
+      )}
     >
       <span className={current === 'en' ? 'text-ink-900' : 'text-ink-500'}>EN</span>
       <span className="mx-1 text-ink-500" aria-hidden="true">

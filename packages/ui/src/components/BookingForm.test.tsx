@@ -60,6 +60,17 @@ describe('BookingForm (visual stub)', () => {
     expect(data.get('message')).toBe('We need a PT PMA setup consultation.')
   })
 
+  it('covers select and textarea default/focus/active state classes', () => {
+    render(<BookingForm labels={labels} services={services} state="idle" onSubmit={() => {}} />)
+
+    for (const fieldName of ['Service', 'Message']) {
+      const field = screen.getByLabelText(fieldName)
+      expect(field.className).toContain('border-b-ink-500')
+      expect(field.className).toContain('focus:border-b-ochre-600')
+      expect(field.className).toContain('active:border-b-ochre-700')
+    }
+  })
+
   it('shows loading label when state=loading', () => {
     render(<BookingForm labels={labels} services={services} state="loading" onSubmit={() => {}} />)
 

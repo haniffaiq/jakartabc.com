@@ -43,12 +43,12 @@ function DefaultLink({ href, className, children }: MobileMenuLinkProps) {
 
 const menuLink =
   'block font-display text-display-md text-ink-900 transition-colors duration-fast ease-out ' +
-  'hover:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+  'hover:text-ochre-700 active:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ' +
   'focus-visible:outline-ochre-600'
 
 const ctaLink =
   'inline-flex w-full items-center justify-center rounded-sm bg-ochre-600 px-24 py-12 ' +
-  'font-body text-body-md text-bone-50 transition-colors duration-fast ease-out hover:bg-ochre-700 ' +
+  'font-body text-body-md text-bone-50 transition-colors duration-fast ease-out hover:bg-ochre-700 active:bg-ochre-700 active:translate-y-px ' +
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600'
 
 export function MobileMenu({
@@ -96,7 +96,15 @@ export function MobileMenu({
           aria-label="Close menu"
           className="inline-flex size-10 items-center justify-center text-ink-900 transition-colors duration-fast ease-out hover:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            aria-hidden="true"
+          >
             <line x1="6" y1="6" x2="18" y2="18" />
             <line x1="18" y1="6" x2="6" y2="18" />
           </svg>

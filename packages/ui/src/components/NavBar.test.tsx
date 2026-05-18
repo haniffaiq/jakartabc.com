@@ -82,8 +82,45 @@ describe('NavBar', () => {
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
+  it('covers DS §20 nav link and CTA state classes', () => {
+    render(
+      <NavBar
+        brand="jakartabc"
+        items={items}
+        cta={{ label: 'Book a call', href: '/contact' }}
+        locale="en"
+        onLocaleChange={() => {}}
+        onMobileOpen={() => {}}
+      />,
+    )
+
+    const servicesLink = screen.getByRole('link', { name: 'Services' })
+    expect(servicesLink.className).toContain('hover:text-ochre-700')
+    expect(servicesLink.className).toContain('active:text-ochre-700')
+    expect(servicesLink.className).toContain('focus-visible:outline-ochre-600')
+
+    const ctaLink = screen.getByRole('link', { name: /book a call/i })
+    expect(ctaLink.className).toContain('bg-ochre-600')
+    expect(ctaLink.className).toContain('hover:bg-ochre-700')
+    expect(ctaLink.className).toContain('active:bg-ochre-700')
+    expect(ctaLink.className).toContain('focus-visible:outline-ochre-600')
+
+    const localeToggle = screen.getByRole('button', { name: /switch to indonesian/i })
+    expect(localeToggle.className).toContain('hover:text-ink-900')
+    expect(localeToggle.className).toContain('active:text-ochre-700')
+    expect(localeToggle.className).toContain('focus-visible:outline-ochre-600')
+  })
+
   it('uses the injected Link component for locale-aware routing', () => {
-    function LocalizedLink({ href, className, children }: { href: string; className?: string; children: React.ReactNode }) {
+    function LocalizedLink({
+      href,
+      className,
+      children,
+    }: {
+      href: string
+      className?: string
+      children: React.ReactNode
+    }) {
       return (
         <a href={`/en${href === '/' ? '' : href}`} className={className}>
           {children}

@@ -50,7 +50,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
         className={cn(
           'bg-transparent px-0 py-8 font-body text-body-md text-ink-900',
           'border-b border-b-ink-500',
-          'focus:border-b-2 focus:border-b-ochre-600 focus:outline-none',
+          'focus:border-b-2 focus:border-b-ochre-600 focus:outline-none active:border-b-ochre-700',
           'placeholder:text-ink-500 disabled:bg-bone-100 disabled:text-ink-500',
           error && 'border-b-2 border-b-danger focus:border-b-danger',
           className,

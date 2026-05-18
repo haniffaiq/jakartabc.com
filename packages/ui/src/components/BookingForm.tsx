@@ -56,7 +56,11 @@ export function BookingForm({
 }: BookingFormProps) {
   if (state === 'success') {
     return (
-      <p role="status" aria-live="polite" className={cn('font-body text-body-lg text-ink-900', className)}>
+      <p
+        role="status"
+        aria-live="polite"
+        className={cn('font-body text-body-lg text-ink-900', className)}
+      >
         {successMessage}
       </p>
     )
@@ -88,7 +92,7 @@ export function BookingForm({
           required
           className={cn(
             'border-b border-b-ink-500 bg-transparent px-0 py-8 font-body text-body-md text-ink-900',
-            'focus:border-b-2 focus:border-b-ochre-600 focus:outline-none',
+            'focus:border-b-2 focus:border-b-ochre-600 focus:outline-none active:border-b-ochre-700',
             'disabled:bg-bone-100 disabled:text-ink-500',
           )}
         >
@@ -104,10 +108,15 @@ export function BookingForm({
       </div>
 
       <fieldset className="flex flex-col gap-4">
-        <legend className="font-body text-eyebrow uppercase text-ink-500">{labels.preferredWindows}</legend>
+        <legend className="font-body text-eyebrow uppercase text-ink-500">
+          {labels.preferredWindows}
+        </legend>
         <div className="grid grid-cols-2 gap-x-16 gap-y-8 md:grid-cols-5">
           {WINDOWS.map((window) => (
-            <label key={window.value} className="flex items-center gap-8 font-body text-body-sm text-ink-900">
+            <label
+              key={window.value}
+              className="flex items-center gap-8 font-body text-body-sm text-ink-900"
+            >
               <input
                 type="checkbox"
                 name="preferredWindows"
@@ -131,7 +140,7 @@ export function BookingForm({
           required
           className={cn(
             'border-b border-b-ink-500 bg-transparent px-0 py-8 font-body text-body-md text-ink-900',
-            'focus:border-b-2 focus:border-b-ochre-600 focus:outline-none',
+            'focus:border-b-2 focus:border-b-ochre-600 focus:outline-none active:border-b-ochre-700',
             'placeholder:text-ink-500 disabled:bg-bone-100 disabled:text-ink-500',
           )}
         />

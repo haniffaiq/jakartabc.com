@@ -36,7 +36,11 @@ export function ContactForm({
 }: ContactFormProps) {
   if (state === 'success') {
     return (
-      <p role="status" aria-live="polite" className={cn('font-body text-body-lg text-ink-900', className)}>
+      <p
+        role="status"
+        aria-live="polite"
+        className={cn('font-body text-body-lg text-ink-900', className)}
+      >
         {successMessage}
       </p>
     )
@@ -66,7 +70,7 @@ export function ContactForm({
           required
           className={cn(
             'border-b border-b-ink-500 bg-transparent px-0 py-8 font-body text-body-md text-ink-900',
-            'focus:border-b-2 focus:border-b-ochre-600 focus:outline-none',
+            'focus:border-b-2 focus:border-b-ochre-600 focus:outline-none active:border-b-ochre-700',
             'placeholder:text-ink-500 disabled:bg-bone-100 disabled:text-ink-500',
           )}
         />
