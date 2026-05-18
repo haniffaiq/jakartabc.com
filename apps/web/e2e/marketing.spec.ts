@@ -20,4 +20,13 @@ for (const locale of ['en', 'id'] as const) {
     await expect(page.getByText(locale === 'en' ? 'FROM THE FOUNDER' : 'DARI FOUNDER')).toBeVisible()
     await expect(page.locator('img[src*="founder-signature"]')).toBeVisible()
   })
+
+  test(`service detail PT PMA renders @ ${locale}`, async ({ page }) => {
+    await page.goto(locale === 'en' ? '/services/pt-pma-setup' : '/id/services/pt-pma-setup')
+
+    await expect(page.locator('html')).toHaveAttribute('lang', locale)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: /PT PMA/i })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: locale === 'en' ? 'On this page' : 'Di halaman ini' })).toBeVisible()
+  })
 }

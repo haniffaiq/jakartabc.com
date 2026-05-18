@@ -16,6 +16,22 @@
     "ctaSecondary": "See how it works",
     "placeholderNote": "Staging environment · full site lands in Phase 1."
   },
+  "serviceDetail": {
+    "tocHeading": "On this page",
+    "ctaBook": "Book a 30-min call",
+    "overview": "OVERVIEW",
+    "whoFor": "WHO IT'S FOR",
+    "requirements": "REQUIREMENTS",
+    "timeline": "TIMELINE",
+    "cost": "COST",
+    "faq": "FAQ",
+    "regulationsCited": "REGULATIONS CITED",
+    "timelineLabels": {
+      "we": "We handle",
+      "joint": "Joint",
+      "you": "You provide"
+    }
+  },
   "errors": {
     "notFoundTitle": "This page isn't here.",
     "notFoundBody": "It may have been moved, or the link is incorrect.",
