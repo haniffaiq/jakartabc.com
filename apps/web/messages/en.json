@@ -88,6 +88,42 @@
       "ICAI registered firm"
     ]
   },
+  "pricing": {
+    "eyebrow": "WHAT YOU PAY",
+    "headline": "Transparent pricing. No hidden costs.",
+    "lead": "Government fees and our fee, line by line. Estimates valid as of May 2026.",
+    "tableHeaders": {
+      "service": "Service",
+      "govFee": "Gov. fee",
+      "ourFee": "Our fee",
+      "total": "Total"
+    },
+    "starter": "Starter package",
+    "footnote": "Estimates as of May 2026. No hidden costs. Custom quotes for regulated sectors.",
+    "ctaQuote": "Get a tailored quote",
+    "rows": [
+      {
+        "service": "PT PMA setup",
+        "govFee": 2500000,
+        "ourFee": 12000000
+      },
+      {
+        "service": "Sector licensing",
+        "govFee": 3000000,
+        "ourFee": 15000000
+      },
+      {
+        "service": "Tax & accounting",
+        "govFee": 0,
+        "ourFee": 4500000
+      },
+      {
+        "service": "Investor KITAS",
+        "govFee": 1500000,
+        "ourFee": 8000000
+      }
+    ]
+  },
   "contact": {
     "eyebrow": "CONTACT",
     "headline": "Tell us what you need.",
