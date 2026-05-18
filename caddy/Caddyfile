@@ -1,0 +1,35 @@
+{
+	email {$ACME_EMAIL}
+	# admin off  # enable once DNS + ACME first issuance is confirmed
+}
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10mb
+			roll_keep 14
+			roll_keep_for 336h
+		}
+		format json
+	}
+
+	reverse_proxy web:3000 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-For {remote}
+		header_up X-Real-IP {remote}
+		transport http {
+			keepalive 30s
+		}
+	}
+}
