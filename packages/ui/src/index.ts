@@ -37,6 +37,12 @@ export {
 export { PricingTable, type PricingRow, type PricingTableProps } from './components/PricingTable'
 export { Hero, type HeroAction, type HeroLinkProps, type HeroProps } from './components/Hero'
 export {
+  FooterBlock,
+  type FooterBlockLegalLink,
+  type FooterBlockLinkProps,
+  type FooterBlockProps,
+} from './components/FooterBlock'
+export {
   EditorialList,
   type EditorialListItem,
   type EditorialListLinkProps,
