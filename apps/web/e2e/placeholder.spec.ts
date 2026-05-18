@@ -37,3 +37,17 @@ test('ID unknown path renders localized editorial not-found', async ({ page }) =
   await expect(page.getByRole('link', { name: 'Layanan' })).toHaveAttribute('href', '/id/services')
   await expect(page.getByRole('link', { name: 'Insight' })).toHaveAttribute('href', '/id/insights')
 })
+
+
+for (const locale of ['en', 'id'] as const) {
+  test(`pricing renders transparent fee table @ ${locale}`, async ({ page }) => {
+    await page.goto(locale === 'en' ? '/pricing' : '/id/pricing')
+    await expect(page.locator('html')).toHaveAttribute('lang', locale)
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(
+      locale === 'en' ? 'Transparent pricing' : 'Harga transparan',
+    )
+    await expect(page.getByRole('table')).toBeVisible()
+    await expect(page.getByRole('row')).toHaveCount(5)
+    await expect(page.getByText(/IDR/i).first()).toBeVisible()
+  })
+}

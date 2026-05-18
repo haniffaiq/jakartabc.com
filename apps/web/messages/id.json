@@ -121,7 +121,29 @@
     },
     "starter": "Paket Starter",
     "footnote": "Estimasi per Mei 2026. Tanpa biaya tersembunyi. Kuotasi khusus untuk sektor teregulasi.",
-    "ctaQuote": "Minta kuotasi khusus"
+    "ctaQuote": "Minta kuotasi khusus",
+    "rows": [
+      {
+        "service": "Pendirian PT PMA",
+        "govFee": 2500000,
+        "ourFee": 12000000
+      },
+      {
+        "service": "Perizinan Sektoral",
+        "govFee": 3000000,
+        "ourFee": 15000000
+      },
+      {
+        "service": "Pajak & Akuntansi",
+        "govFee": 0,
+        "ourFee": 4500000
+      },
+      {
+        "service": "KITAS Investor",
+        "govFee": 1500000,
+        "ourFee": 8000000
+      }
+    ]
   },
   "about": {
     "eyebrow": "TENTANG",
