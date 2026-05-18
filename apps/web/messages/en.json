@@ -43,5 +43,33 @@
     "headline": "Editorial on Indonesian FDI, with citations.",
     "lead": "Long-form articles on regulations, sectors, and operational realities. No SEO listicles.",
     "empty": "No articles yet. Subscribe via the footer to be notified when we publish."
+  },
+  "about": {
+    "eyebrow": "ABOUT",
+    "headline": "A boutique Jakarta firm. Quiet, specific, accountable.",
+    "lead": "We started Jakarta Business Center to bring editorial clarity to foreign direct investment in Indonesia.",
+    "founderEyebrow": "FROM THE FOUNDER",
+    "founderNote": "When I founded Jakarta BC in 2019, I'd already watched a dozen friends abandon Indonesia ventures over avoidable licensing surprises. The premise of this firm is simple: tell investors what it actually takes, with real numbers and real timelines. No theater. Diah Putri, Founder.",
+    "teamEyebrow": "TEAM",
+    "team": [
+      {
+        "name": "Diah Putri",
+        "role": "Founder, Senior Consultant"
+      },
+      {
+        "name": "Andi Wirawan",
+        "role": "Tax & Accounting Lead"
+      },
+      {
+        "name": "Maya Hadi",
+        "role": "Sector Licensing Lead"
+      }
+    ],
+    "licensesEyebrow": "LICENSES & REGISTRATION",
+    "licenses": [
+      "BKPM Licensed Consultant — Reg 001/2025",
+      "Bar Association of Jakarta member",
+      "ICAI registered firm"
+    ]
   }
 }

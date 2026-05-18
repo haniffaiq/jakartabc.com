@@ -11,4 +11,13 @@ for (const locale of ['en', 'id'] as const) {
     )
     await expect(page.getByText(/No articles yet|Belum ada/i)).toBeVisible()
   })
+
+  test(`about renders founder note dark band @ ${locale}`, async ({ page }) => {
+    await page.goto(locale === 'en' ? '/about' : '/id/about')
+
+    await expect(page.locator('html')).toHaveAttribute('lang', locale)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByText(locale === 'en' ? 'FROM THE FOUNDER' : 'DARI FOUNDER')).toBeVisible()
+    await expect(page.locator('img[src*="founder-signature"]')).toBeVisible()
+  })
 }
