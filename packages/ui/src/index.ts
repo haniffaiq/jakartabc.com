@@ -21,3 +21,8 @@ export {
   type InsightCardProps,
 } from './components/InsightCard'
 export { EditorialQuote, type EditorialQuoteProps } from './components/EditorialQuote'
+export {
+  EditorialTimeline,
+  type EditorialTimelineProps,
+  type TimelineStep,
+} from './components/EditorialTimeline'
