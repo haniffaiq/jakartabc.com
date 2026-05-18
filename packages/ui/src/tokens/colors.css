@@ -1,33 +1,33 @@
 :root {
   /* Core */
-  --ink-900: #1A1815;
-  --ink-700: #3A352E;
-  --ink-500: #6B6358;
+  --ink-900: #1a1815;
+  --ink-700: #3a352e;
+  --ink-500: #6b6358;
 
   /* Surfaces */
-  --bone-50: #FAF7F2;
-  --bone-100: #F2EDE4;
-  --bone-200: #E5DDD0;
+  --bone-50: #faf7f2;
+  --bone-100: #f2ede4;
+  --bone-200: #e5ddd0;
 
   /* Accent */
-  --ochre-600: #B8893A;
-  --ochre-700: #95701E;
-  --ochre-100: #F0E3C9;
+  --ochre-600: #8a661b;
+  --ochre-700: #775716;
+  --ochre-100: #f0e3c9;
 
   /* Functional */
-  --success: #4A6B3F;
-  --warning: #B8732A;
-  --danger: #8B3A2E;
-  --info: #3A5567;
+  --success: #4a6b3f;
+  --warning: #b8732a;
+  --danger: #8b3a2e;
+  --info: #3a5567;
 
   /* Border */
   --rule-soft: rgba(26, 24, 21, 0.08);
   --rule-firm: rgba(26, 24, 21, 0.16);
 
   /* Dark variant (selective per design-system.md §24) */
-  --dark-bg: #1A1815;
+  --dark-bg: #1a1815;
   --dark-surface: #252220;
-  --dark-text: #F2EDE4;
-  --dark-text-2: #B0A89B;
-  --dark-accent: #D4A24C;
+  --dark-text: #f2ede4;
+  --dark-text-2: #b0a89b;
+  --dark-accent: #d4a24c;
 }
