@@ -9,3 +9,8 @@ export {
   type ContactFormState,
 } from './components/ContactForm'
 export { Input, type InputProps } from './components/Input'
+export {
+  InsightCard,
+  type InsightCardLinkProps,
+  type InsightCardProps,
+} from './components/InsightCard'
