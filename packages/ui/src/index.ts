@@ -3,6 +3,12 @@ export { Button, type ButtonProps, type ButtonVariant } from './components/Butto
 export { Card } from './components/Card'
 export { ContactBlock, type ContactBlockProps } from './components/ContactBlock'
 export {
+  BookingForm,
+  type BookingFormLabels,
+  type BookingFormProps,
+  type BookingFormState,
+} from './components/BookingForm'
+export {
   ContactForm,
   type ContactFormLabels,
   type ContactFormProps,
