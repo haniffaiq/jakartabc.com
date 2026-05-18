@@ -18,9 +18,22 @@ test('ID home renders placeholder with lang="id"', async ({ page }) => {
   await expect(page.getByTestId('placeholder-note')).toContainText('staging')
 })
 
-test('unknown locale path renders localized not-found', async ({ page }) => {
+test('EN unknown path renders editorial not-found', async ({ page }) => {
   const response = await page.goto('/this-route-does-not-exist')
   expect(response?.status()).toBe(404)
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   await expect(page.getByRole('heading', { level: 1 })).toContainText("This page isn't here.")
+  await expect(page.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
+  await expect(page.getByRole('link', { name: 'Services' })).toHaveAttribute('href', '/services')
+  await expect(page.getByRole('link', { name: 'Insights' })).toHaveAttribute('href', '/insights')
+})
+
+test('ID unknown path renders localized editorial not-found', async ({ page }) => {
+  const response = await page.goto('/id/this-route-does-not-exist')
+  expect(response?.status()).toBe(404)
+  await expect(page.locator('html')).toHaveAttribute('lang', 'id')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Halaman ini tidak ada')
+  await expect(page.getByRole('link', { name: 'Beranda' })).toHaveAttribute('href', '/id')
+  await expect(page.getByRole('link', { name: 'Layanan' })).toHaveAttribute('href', '/id/services')
+  await expect(page.getByRole('link', { name: 'Insight' })).toHaveAttribute('href', '/id/insights')
 })

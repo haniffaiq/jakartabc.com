@@ -24,5 +24,18 @@
     "errorBody": "Tim kami sudah diberi tahu. Anda juga bisa kontak langsung lewat email.",
     "errorEmail": "Email hello@jakartabc.com",
     "errorRetry": "Coba lagi"
+  },
+  "notFound": {
+    "headline": "Halaman ini tidak ada di sini.",
+    "lead": "Mungkin telah dipindahkan atau tautannya salah.",
+    "home": "Beranda",
+    "services": "Layanan",
+    "insights": "Insight",
+    "navLabel": "Halaman penting"
+  },
+  "errorPage": {
+    "headline": "Ada yang tidak berjalan di sisi kami.",
+    "lead": "Tim kami sudah diberi tahu. Jika mendesak, email kami langsung.",
+    "emailLabel": "hello@jakartabc.com"
   }
 }
