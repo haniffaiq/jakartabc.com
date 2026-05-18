@@ -17,7 +17,9 @@ for (const locale of ['en', 'id'] as const) {
 
     await expect(page.locator('html')).toHaveAttribute('lang', locale)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    await expect(page.getByText(locale === 'en' ? 'FROM THE FOUNDER' : 'DARI FOUNDER')).toBeVisible()
+    await expect(
+      page.getByText(locale === 'en' ? 'FROM THE FOUNDER' : 'DARI FOUNDER'),
+    ).toBeVisible()
     await expect(page.locator('img[src*="founder-signature"]')).toBeVisible()
   })
 
@@ -27,7 +29,9 @@ for (const locale of ['en', 'id'] as const) {
     await expect(page.locator('html')).toHaveAttribute('lang', locale)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.getByRole('heading', { name: /PT PMA/i })).toBeVisible()
-    await expect(page.getByRole('navigation', { name: locale === 'en' ? 'On this page' : 'Di halaman ini' })).toBeVisible()
+    await expect(
+      page.getByRole('navigation', { name: locale === 'en' ? 'On this page' : 'Di halaman ini' }),
+    ).toBeVisible()
   })
 
   test(`contact form fields @ ${locale}`, async ({ page }) => {
@@ -35,5 +39,23 @@ for (const locale of ['en', 'id'] as const) {
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.locator('input[name="email"]')).toBeVisible()
     await expect(page.locator('textarea[name="message"]')).toBeVisible()
+  })
+
+  test(`services overview renders 4 items @ ${locale}`, async ({ page }) => {
+    await page.goto(locale === 'en' ? '/services' : '/id/services', {
+      waitUntil: 'domcontentloaded',
+    })
+
+    await expect(page.locator('html')).toHaveAttribute('lang', locale)
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(
+      locale === 'en'
+        ? 'Foreign direct investment in Indonesia, end to end.'
+        : 'Investasi asing langsung di Indonesia, end-to-end.',
+    )
+    await expect(page.getByText('01')).toBeVisible()
+    await expect(page.getByText('04')).toBeVisible()
+    await expect(
+      page.getByText(locale === 'en' ? 'PT PMA Setup' : 'Pendirian PT PMA'),
+    ).toBeVisible()
   })
 }

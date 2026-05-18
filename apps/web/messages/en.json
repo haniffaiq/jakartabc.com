@@ -103,5 +103,37 @@
     "successMessage": "Thanks. We'll reply within 1 business day.",
     "officeEyebrow": "OFFICE",
     "officeAddress": "Sudirman Central Business District, Jakarta 12190, Indonesia"
+  },
+  "services": {
+    "eyebrow": "WHAT WE DO",
+    "headline": "Foreign direct investment in Indonesia, end to end.",
+    "lead": "Four core services. Editorial transparency on what's included, how long it takes, and what it costs.",
+    "readLabel": "Read",
+    "list": [
+      {
+        "slug": "pt-pma-setup",
+        "title": "PT PMA Setup",
+        "desc": "Foreign-owned LLC registration, end to end.",
+        "timeline": "4–6 wks"
+      },
+      {
+        "slug": "sector-licensing",
+        "title": "Sector Licensing",
+        "desc": "OSS, KBLI, sector-specific permits.",
+        "timeline": "2–8 wks"
+      },
+      {
+        "slug": "tax-accounting",
+        "title": "Tax & Accounting",
+        "desc": "Monthly tax filing, payroll, annual reporting.",
+        "timeline": "ongoing"
+      },
+      {
+        "slug": "investor-kitas",
+        "title": "Investor KITAS",
+        "desc": "Residency for foreign shareholders and directors.",
+        "timeline": "3–4 wks"
+      }
+    ]
   }
 }
