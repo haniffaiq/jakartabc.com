@@ -1,0 +1,40 @@
+{
+  "name": "@jakartabc/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint --dir src",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"(no unit tests in apps/web — see packages/ui)\" && exit 0",
+    "test:e2e": "playwright test",
+    "payload:generate-types": "payload generate:types"
+  },
+  "dependencies": {
+    "@jakartabc/ui": "workspace:*",
+    "@payloadcms/db-postgres": "3.0.0",
+    "@payloadcms/next": "3.0.0",
+    "@payloadcms/richtext-lexical": "3.0.0",
+    "next": "15.0.3",
+    "next-intl": "3.21.1",
+    "payload": "3.0.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "sharp": "0.33.5",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@jakartabc/config": "workspace:*",
+    "@playwright/test": "1.48.2",
+    "@types/node": "20.16.11",
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.1",
+    "autoprefixer": "10.4.20",
+    "postcss": "8.4.47",
+    "tailwindcss": "3.4.13",
+    "typescript": "5.6.3"
+  }
+}
