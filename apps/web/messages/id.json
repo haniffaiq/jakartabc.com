@@ -1,0 +1,28 @@
+{
+  "common": {
+    "siteName": "Jakarta Business Center",
+    "tagline": "Investasi Asing Langsung · Indonesia",
+    "languageToggle": {
+      "en": "EN",
+      "id": "ID"
+    }
+  },
+  "home": {
+    "eyebrow": "Investasi Asing Langsung · Indonesia",
+    "headline": "Dirikan PT PMA di Indonesia.",
+    "subheadline": "Tanpa menebak-nebak.",
+    "lead": "Pendirian perusahaan PMA, perizinan sektor, dan kepatuhan berkelanjutan — ditangani tim Jakarta.",
+    "ctaPrimary": "Pesan konsultasi 30 menit",
+    "ctaSecondary": "Lihat cara kerjanya",
+    "placeholderNote": "Lingkungan staging · situs lengkap pada Phase 1."
+  },
+  "errors": {
+    "notFoundTitle": "Halaman ini tidak ada di sini.",
+    "notFoundBody": "Mungkin telah dipindahkan atau tautannya salah.",
+    "notFoundHome": "Kembali ke beranda",
+    "errorTitle": "Ada yang tidak berjalan di sisi kami.",
+    "errorBody": "Tim kami sudah diberi tahu. Anda juga bisa kontak langsung lewat email.",
+    "errorEmail": "Email hello@jakartabc.com",
+    "errorRetry": "Coba lagi"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "common": {
+    "siteName": "Jakarta Business Center",
+    "tagline": "Foreign Direct Investment · Indonesia",
+    "languageToggle": {
+      "en": "EN",
+      "id": "ID"
+    }
+  },
+  "home": {
+    "eyebrow": "Foreign Direct Investment · Indonesia",
+    "headline": "Set up a PT PMA in Indonesia.",
+    "subheadline": "Without the guesswork.",
+    "lead": "Foreign-owned company registration, sector licensing, and ongoing compliance — handled by a Jakarta team.",
+    "ctaPrimary": "Book a 30-min call",
+    "ctaSecondary": "See how it works",
+    "placeholderNote": "Staging environment · full site lands in Phase 1."
+  },
+  "errors": {
+    "notFoundTitle": "This page isn't here.",
+    "notFoundBody": "It may have been moved, or the link is incorrect.",
+    "notFoundHome": "Back to home",
+    "errorTitle": "Something on our end isn't working.",
+    "errorBody": "We've been notified. You can also email us directly.",
+    "errorEmail": "Email hello@jakartabc.com",
+    "errorRetry": "Try again"
+  }
+}
