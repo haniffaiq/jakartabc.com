@@ -1,0 +1,1 @@
+{"extends":"@jakartabc/config/tsconfig/react-library.json","include":["src/**/*","tailwind-preset.ts","vitest.config.ts","vitest.setup.ts"],"compilerOptions":{"baseUrl":".","paths":{"@/*":["./src/*"]}}}

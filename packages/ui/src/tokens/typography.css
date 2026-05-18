@@ -1,0 +1,29 @@
+:root {
+  --font-display: "Fraunces", "GT Sectra", "Tiempos Headline", Georgia, serif;
+  --font-body: "Inter", "Söhne", "Neue Haas Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Size / line-height pairs (px) */
+  --fs-display-xl: 64px;
+  --lh-display-xl: 72px;
+  --fs-display-lg: 48px;
+  --lh-display-lg: 56px;
+  --fs-display-md: 36px;
+  --lh-display-md: 44px;
+  --fs-heading-lg: 28px;
+  --lh-heading-lg: 36px;
+  --fs-heading-md: 22px;
+  --lh-heading-md: 30px;
+  --fs-body-lg: 18px;
+  --lh-body-lg: 30px;
+  --fs-body-md: 16px;
+  --lh-body-md: 26px;
+  --fs-body-sm: 14px;
+  --lh-body-sm: 22px;
+  --fs-mono-sm: 13px;
+  --lh-mono-sm: 20px;
+  --fs-eyebrow: 12px;
+  --lh-eyebrow: 16px;
+
+  --tracking-eyebrow: 0.08em;
+}
