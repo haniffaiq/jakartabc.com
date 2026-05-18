@@ -29,3 +29,9 @@ export {
 export { LangToggle, type LangToggleProps, type LocaleCode } from './components/LangToggle'
 export { PricingTable, type PricingRow, type PricingTableProps } from './components/PricingTable'
 export { Hero, type HeroAction, type HeroLinkProps, type HeroProps } from './components/Hero'
+export {
+  EditorialList,
+  type EditorialListItem,
+  type EditorialListLinkProps,
+  type EditorialListProps,
+} from './components/EditorialList'
