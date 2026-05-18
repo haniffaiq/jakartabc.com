@@ -1,0 +1,33 @@
+:root {
+  /* Core */
+  --ink-900: #1A1815;
+  --ink-700: #3A352E;
+  --ink-500: #6B6358;
+
+  /* Surfaces */
+  --bone-50: #FAF7F2;
+  --bone-100: #F2EDE4;
+  --bone-200: #E5DDD0;
+
+  /* Accent */
+  --ochre-600: #B8893A;
+  --ochre-700: #95701E;
+  --ochre-100: #F0E3C9;
+
+  /* Functional */
+  --success: #4A6B3F;
+  --warning: #B8732A;
+  --danger: #8B3A2E;
+  --info: #3A5567;
+
+  /* Border */
+  --rule-soft: rgba(26, 24, 21, 0.08);
+  --rule-firm: rgba(26, 24, 21, 0.16);
+
+  /* Dark variant (selective per design-system.md §24) */
+  --dark-bg: #1A1815;
+  --dark-surface: #252220;
+  --dark-text: #F2EDE4;
+  --dark-text-2: #B0A89B;
+  --dark-accent: #D4A24C;
+}
