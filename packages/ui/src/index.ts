@@ -27,6 +27,13 @@ export {
   type TimelineStep,
 } from './components/EditorialTimeline'
 export { LangToggle, type LangToggleProps, type LocaleCode } from './components/LangToggle'
+export {
+  MobileMenu,
+  type MobileMenuCta,
+  type MobileMenuItem,
+  type MobileMenuLinkProps,
+  type MobileMenuProps,
+} from './components/MobileMenu'
 export { PricingTable, type PricingRow, type PricingTableProps } from './components/PricingTable'
 export { Hero, type HeroAction, type HeroLinkProps, type HeroProps } from './components/Hero'
 export {
