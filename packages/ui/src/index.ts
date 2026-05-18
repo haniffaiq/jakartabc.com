@@ -1,6 +1,7 @@
 export { cn } from './lib/cn'
 export { Button, type ButtonProps, type ButtonVariant } from './components/Button'
 export { Card } from './components/Card'
+export { ContactBlock, type ContactBlockProps } from './components/ContactBlock'
 export {
   ContactForm,
   type ContactFormLabels,
