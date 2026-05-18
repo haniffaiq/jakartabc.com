@@ -26,4 +26,5 @@ export {
   type EditorialTimelineProps,
   type TimelineStep,
 } from './components/EditorialTimeline'
+export { LangToggle, type LangToggleProps, type LocaleCode } from './components/LangToggle'
 export { PricingTable, type PricingRow, type PricingTableProps } from './components/PricingTable'
