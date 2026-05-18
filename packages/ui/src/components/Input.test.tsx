@@ -10,17 +10,42 @@ describe('Input', () => {
     expect(input.tagName).toBe('INPUT')
   })
 
-  it('renders helper text below input', () => {
-    render(<Input label="Email" name="email" helper="We never share." />)
+  it('covers default, focus, active, disabled, and error states', () => {
+    const { rerender } = render(<Input label="Email" name="email" helper="We never share." />)
+    let input = screen.getByLabelText(/email/i)
+    let classList = Array.from(input.classList)
+
+    expect(classList).toEqual(
+      expect.arrayContaining(['border-b', 'border-b-ink-500', 'text-ink-900']),
+    )
+    expect(classList).toEqual(
+      expect.arrayContaining([
+        'focus:border-b-2',
+        'focus:border-b-ochre-600',
+        'focus:outline-none',
+      ]),
+    )
+    expect(classList).toContain('active:border-b-ochre-700')
     expect(screen.getByText(/we never share/i)).toBeInTheDocument()
+
+    rerender(
+      <Input label="Email" name="email" helper="We never share." error="Required" disabled />,
+    )
+    input = screen.getByLabelText(/email/i)
+    classList = Array.from(input.classList)
+    expect(classList).toEqual(
+      expect.arrayContaining(['disabled:bg-bone-100', 'disabled:text-ink-500']),
+    )
+    expect(input).toBeDisabled()
+    expect(input).toHaveAttribute('aria-invalid', 'true')
+    expect(input).toHaveAttribute('aria-describedby', expect.stringContaining('input-email-error'))
+    expect(screen.queryByText(/we never share/i)).toBeNull()
+    expect(screen.getByText(/required/i)).toHaveClass('text-danger')
   })
 
-  it('renders error text and applies danger border', () => {
-    render(<Input label="Email" name="email" error="Required" />)
-    const input = screen.getByLabelText(/email/i)
-    expect(input.className).toMatch(/border-b-danger/)
-    expect(input).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.getByText(/required/i)).toBeInTheDocument()
+  it('renders helper text below input when no error is present', () => {
+    render(<Input label="Email" name="email" helper="We never share." />)
+    expect(screen.getByText(/we never share/i)).toBeInTheDocument()
   })
 
   it('forwards type and value props', () => {

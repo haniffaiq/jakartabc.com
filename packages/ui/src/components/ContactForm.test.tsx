@@ -42,6 +42,15 @@ describe('ContactForm', () => {
     expect(data.get('message')).toBe('I need help with a PT PMA setup.')
   })
 
+  it('covers textarea default/focus/active state classes', () => {
+    render(<ContactForm labels={labels} state="idle" onSubmit={() => {}} />)
+
+    const textarea = screen.getByLabelText('Message')
+    expect(textarea.className).toContain('border-b-ink-500')
+    expect(textarea.className).toContain('focus:border-b-ochre-600')
+    expect(textarea.className).toContain('active:border-b-ochre-700')
+  })
+
   it('uses accessible state copy for loading, success, and error', () => {
     const { rerender } = render(<ContactForm labels={labels} state="loading" onSubmit={() => {}} />)
 

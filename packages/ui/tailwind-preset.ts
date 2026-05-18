@@ -33,16 +33,38 @@ const preset = {
         mono: 'var(--font-mono)',
       },
       fontSize: {
-        'display-xl': ['var(--fs-display-xl)', { lineHeight: 'var(--lh-display-xl)', fontWeight: '400' }],
-        'display-lg': ['var(--fs-display-lg)', { lineHeight: 'var(--lh-display-lg)', fontWeight: '400' }],
-        'display-md': ['var(--fs-display-md)', { lineHeight: 'var(--lh-display-md)', fontWeight: '400' }],
-        'heading-lg': ['var(--fs-heading-lg)', { lineHeight: 'var(--lh-heading-lg)', fontWeight: '500' }],
-        'heading-md': ['var(--fs-heading-md)', { lineHeight: 'var(--lh-heading-md)', fontWeight: '500' }],
+        'display-xl': [
+          'var(--fs-display-xl)',
+          { lineHeight: 'var(--lh-display-xl)', fontWeight: '400' },
+        ],
+        'display-lg': [
+          'var(--fs-display-lg)',
+          { lineHeight: 'var(--lh-display-lg)', fontWeight: '400' },
+        ],
+        'display-md': [
+          'var(--fs-display-md)',
+          { lineHeight: 'var(--lh-display-md)', fontWeight: '400' },
+        ],
+        'heading-lg': [
+          'var(--fs-heading-lg)',
+          { lineHeight: 'var(--lh-heading-lg)', fontWeight: '500' },
+        ],
+        'heading-md': [
+          'var(--fs-heading-md)',
+          { lineHeight: 'var(--lh-heading-md)', fontWeight: '500' },
+        ],
         'body-lg': ['var(--fs-body-lg)', { lineHeight: 'var(--lh-body-lg)', fontWeight: '400' }],
         'body-md': ['var(--fs-body-md)', { lineHeight: 'var(--lh-body-md)', fontWeight: '400' }],
         'body-sm': ['var(--fs-body-sm)', { lineHeight: 'var(--lh-body-sm)', fontWeight: '400' }],
         'mono-sm': ['var(--fs-mono-sm)', { lineHeight: 'var(--lh-mono-sm)', fontWeight: '400' }],
-        eyebrow: ['var(--fs-eyebrow)', { lineHeight: 'var(--lh-eyebrow)', fontWeight: '500', letterSpacing: 'var(--tracking-eyebrow)' }],
+        eyebrow: [
+          'var(--fs-eyebrow)',
+          {
+            lineHeight: 'var(--lh-eyebrow)',
+            fontWeight: '500',
+            letterSpacing: 'var(--tracking-eyebrow)',
+          },
+        ],
       },
       spacing: {
         '2': 'var(--space-2)',
@@ -70,6 +92,15 @@ const preset = {
       transitionDuration: {
         fast: '150ms',
         reveal: '300ms',
+      },
+      keyframes: {
+        'spin-slow': {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
+      },
+      animation: {
+        'spin-slow': 'spin-slow 1.2s linear infinite',
       },
     },
   },

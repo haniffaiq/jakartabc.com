@@ -58,7 +58,7 @@ export function NavBar({
       <div className="mx-auto flex h-full max-w-container items-center justify-between px-6 md:px-10">
         <Link
           href="/"
-          className="font-display text-2xl text-ink-900 underline-offset-4 hover:underline"
+          className="font-display text-2xl text-ink-900 underline-offset-4 hover:text-ochre-700 hover:underline active:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
         >
           {brand}
         </Link>
@@ -68,7 +68,7 @@ export function NavBar({
             <li key={item.href}>
               <Link
                 href={item.href}
-                className="text-body-md text-ink-900 underline-offset-4 hover:text-ochre-700 hover:underline"
+                className="text-body-md text-ink-900 underline-offset-4 hover:text-ochre-700 hover:underline active:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
               >
                 {item.label}
               </Link>
@@ -81,13 +81,13 @@ export function NavBar({
             type="button"
             onClick={() => onLocaleChange(next)}
             aria-label={`Switch to ${next === 'id' ? 'Indonesian' : 'English'}`}
-            className="text-eyebrow uppercase tracking-[0.08em] text-ink-700 hover:text-ink-900"
+            className="text-eyebrow uppercase tracking-[0.08em] text-ink-700 hover:text-ink-900 active:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
           >
             EN · ID
           </button>
           <Link
             href={cta.href}
-            className="inline-flex items-center justify-center rounded-sm bg-ochre-600 px-24 py-12 font-body text-body-md text-bone-50 transition-colors duration-fast hover:bg-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
+            className="inline-flex items-center justify-center rounded-sm bg-ochre-600 px-24 py-12 font-body text-body-md text-bone-50 transition-colors duration-fast hover:bg-ochre-700 active:bg-ochre-700 active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
           >
             {cta.label}
           </Link>
@@ -97,7 +97,7 @@ export function NavBar({
           type="button"
           aria-label="Open menu"
           onClick={onMobileOpen}
-          className="text-ink-900 md:hidden"
+          className="text-ink-900 hover:text-ochre-700 active:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600 md:hidden"
         >
           <svg
             width="24"

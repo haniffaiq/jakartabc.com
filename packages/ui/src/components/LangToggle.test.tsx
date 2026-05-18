@@ -12,6 +12,14 @@ describe('LangToggle', () => {
     expect(screen.getByText('ID')).toHaveClass('text-ink-500')
   })
 
+  it('covers nav-toggle hover, focus, and active classes', () => {
+    render(<LangToggle current="id" onChange={() => {}} />)
+    const toggle = screen.getByRole('button', { name: 'Switch to English' })
+    expect(toggle.className).toContain('hover:text-ink-900')
+    expect(toggle.className).toContain('active:text-ochre-700')
+    expect(toggle.className).toContain('focus-visible:outline-ochre-600')
+  })
+
   it('calls onChange with the opposite locale on click', () => {
     const onChange = vi.fn()
     render(<LangToggle current="en" onChange={onChange} />)

@@ -9,11 +9,31 @@ describe('Button', () => {
     expect(el.tagName).toBe('BUTTON')
   })
 
-  it('applies primary variant classes by default (ochre bg, bone text)', () => {
-    render(<Button>Primary</Button>)
-    const el = screen.getByRole('button', { name: /primary/i })
-    expect(el.className).toMatch(/bg-ochre-600/)
-    expect(el.className).toMatch(/text-bone-50/)
+  it('covers default, hover, focus, active, disabled, and loading states', () => {
+    render(<Button loading>Send</Button>)
+    const el = screen.getByRole('button', { name: /send/i })
+    const classList = Array.from(el.classList)
+
+    expect(classList).toEqual(expect.arrayContaining(['bg-ochre-600', 'text-bone-50']))
+    expect(classList).toEqual(expect.arrayContaining(['hover:bg-ochre-700']))
+    expect(classList).toEqual(
+      expect.arrayContaining([
+        'focus-visible:outline',
+        'focus-visible:outline-2',
+        'focus-visible:outline-offset-2',
+        'focus-visible:outline-ochre-600',
+      ]),
+    )
+    expect(classList).toEqual(
+      expect.arrayContaining(['active:bg-ochre-700', 'active:translate-y-px']),
+    )
+    expect(classList).toEqual(
+      expect.arrayContaining(['disabled:bg-bone-200', 'disabled:text-ink-500']),
+    )
+    expect(el).toBeDisabled()
+    expect(el).toHaveAttribute('aria-busy', 'true')
+    expect(el.textContent).toMatch(/·/)
+    expect(el.querySelector('[aria-hidden="true"]')).toHaveClass('animate-spin-slow', 'font-mono')
   })
 
   it('applies secondary variant when requested', () => {
@@ -28,14 +48,6 @@ describe('Button', () => {
     const el = screen.getByRole('link', { name: /see services/i })
     expect(el.tagName).toBe('A')
     expect(el).toHaveAttribute('href', '/services')
-  })
-
-  it('shows loading indicator and disables interaction when loading', () => {
-    render(<Button loading>Send</Button>)
-    const el = screen.getByRole('button', { name: /send/i })
-    expect(el).toBeDisabled()
-    expect(el).toHaveAttribute('aria-busy', 'true')
-    expect(el.textContent).toMatch(/·/)
   })
 
   it('is disabled when disabled prop set', () => {

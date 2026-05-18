@@ -27,11 +27,11 @@ const base =
   'transition-colors duration-fast ease-out ' +
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ' +
   'focus-visible:outline-ochre-600 ' +
-  'disabled:cursor-not-allowed disabled:opacity-60'
+  'active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60'
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    'bg-ochre-600 text-bone-50 px-24 py-12 hover:bg-ochre-700 ' +
+    'bg-ochre-600 text-bone-50 px-24 py-12 hover:bg-ochre-700 active:bg-ochre-700 ' +
     'disabled:bg-bone-200 disabled:text-ink-500',
   secondary: 'border border-ink-900 text-ink-900 bg-transparent px-24 py-12 ' + 'hover:bg-bone-100',
   ghost: 'text-ink-900 px-8 py-4 underline-offset-4 hover:underline hover:text-ochre-700',
@@ -42,7 +42,7 @@ function Spinner() {
   return (
     <span
       aria-hidden="true"
-      className="inline-block font-mono animate-spin"
+      className="inline-block font-mono animate-spin-slow"
       style={{ animationDuration: '1.2s' }}
     >
       ·

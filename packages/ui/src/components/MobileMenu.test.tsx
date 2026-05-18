@@ -74,11 +74,29 @@ describe('MobileMenu', () => {
     expect(onLocaleChange).toHaveBeenCalledWith('id')
   })
 
+  it('covers DS §20 mobile nav and CTA state classes', () => {
+    render(<MobileMenu {...baseProps} open onClose={() => {}} />)
+
+    const servicesLink = screen.getByRole('link', { name: 'Services' })
+    expect(servicesLink.className).toContain('hover:text-ochre-700')
+    expect(servicesLink.className).toContain('active:text-ochre-700')
+    expect(servicesLink.className).toContain('focus-visible:outline-ochre-600')
+
+    const ctaLink = screen.getByRole('link', { name: 'Book consultation' })
+    expect(ctaLink.className).toContain('bg-ochre-600')
+    expect(ctaLink.className).toContain('hover:bg-ochre-700')
+    expect(ctaLink.className).toContain('active:bg-ochre-700')
+    expect(ctaLink.className).toContain('focus-visible:outline-ochre-600')
+  })
+
   it('supports injectable locale-aware links', () => {
     render(<MobileMenu {...baseProps} open onClose={() => {}} Link={TestLink} />)
 
     expect(screen.getByRole('link', { name: 'Services' })).toHaveAttribute('href', '/en/services')
-    expect(screen.getByRole('link', { name: 'Book consultation' })).toHaveAttribute('href', '/en/contact')
+    expect(screen.getByRole('link', { name: 'Book consultation' })).toHaveAttribute(
+      'href',
+      '/en/contact',
+    )
   })
 
   it('exports MobileMenu from the package entrypoint', () => {
