@@ -7,14 +7,189 @@
       "id": "ID"
     }
   },
+  "nav": {
+    "services": "Layanan",
+    "insights": "Insight",
+    "about": "Tentang",
+    "pricing": "Harga",
+    "cta": "Jadwalkan konsultasi"
+  },
+  "footer": {
+    "address": [
+      "Sudirman Central Business District",
+      "Jakarta 12190, Indonesia"
+    ],
+    "email": "hello@jakartabc.com",
+    "licenses": [
+      "Konsultan Berlisensi BKPM",
+      "PT PMA Terdaftar: 001/2025"
+    ]
+  },
   "home": {
-    "eyebrow": "Investasi Asing Langsung · Indonesia",
-    "headline": "Dirikan PT PMA di Indonesia.",
+    "eyebrow": "INVESTASI ASING LANGSUNG · INDONESIA",
+    "headline": "Dirikan PT PMA di Indonesia. Tanpa menebak.",
     "subheadline": "Tanpa menebak-nebak.",
-    "lead": "Pendirian perusahaan PMA, perizinan sektor, dan kepatuhan berkelanjutan — ditangani tim Jakarta.",
+    "lead": "Pendirian perusahaan kepemilikan asing, izin sektoral, dan kepatuhan berkelanjutan — ditangani tim Jakarta yang sudah melakukannya 400+ kali.",
     "ctaPrimary": "Pesan konsultasi 30 menit",
     "ctaSecondary": "Lihat cara kerjanya",
-    "placeholderNote": "Lingkungan staging · situs lengkap pada Phase 1."
+    "primaryCta": "Jadwalkan panggilan 30 menit",
+    "secondaryCta": "Lihat prosesnya",
+    "placeholderNote": "Lingkungan staging · situs lengkap pada Phase 1.",
+    "servicesEyebrow": "YANG KAMI KERJAKAN",
+    "servicesRead": "Baca",
+    "services": [
+      {
+        "slug": "pt-pma-setup",
+        "title": "Pendirian PT PMA",
+        "desc": "Pendirian perusahaan kepemilikan asing, end-to-end.",
+        "timeline": "4–6 minggu"
+      },
+      {
+        "slug": "sector-licensing",
+        "title": "Perizinan Sektoral",
+        "desc": "OSS, KBLI, izin spesifik sektor.",
+        "timeline": "2–8 minggu"
+      },
+      {
+        "slug": "tax-accounting",
+        "title": "Pajak & Akuntansi",
+        "desc": "Pelaporan pajak bulanan, payroll, laporan tahunan.",
+        "timeline": "berjalan"
+      },
+      {
+        "slug": "investor-kitas",
+        "title": "KITAS Investor",
+        "desc": "Izin tinggal untuk pemegang saham dan direktur asing.",
+        "timeline": "3–4 minggu"
+      }
+    ],
+    "quote": "Mereka mengurus filing BKPM dalam dua minggu. Tidak ada biaya kejutan di akhir.",
+    "quoteAuthor": "Maria Tanaka",
+    "quoteRole": "Founder, Solstice KK"
+  },
+  "services": {
+    "eyebrow": "YANG KAMI KERJAKAN",
+    "headline": "Investasi asing langsung di Indonesia, end-to-end.",
+    "lead": "Empat layanan inti. Transparansi editorial: apa yang termasuk, berapa lama, dan berapa biayanya.",
+    "readLabel": "Baca",
+    "list": [
+      {
+        "slug": "pt-pma-setup",
+        "title": "Pendirian PT PMA",
+        "desc": "Pendirian perusahaan kepemilikan asing, end-to-end.",
+        "timeline": "4–6 minggu"
+      },
+      {
+        "slug": "sector-licensing",
+        "title": "Perizinan Sektoral",
+        "desc": "OSS, KBLI, izin spesifik sektor.",
+        "timeline": "2–8 minggu"
+      },
+      {
+        "slug": "tax-accounting",
+        "title": "Pajak & Akuntansi",
+        "desc": "Pelaporan pajak bulanan, payroll, laporan tahunan.",
+        "timeline": "berjalan"
+      },
+      {
+        "slug": "investor-kitas",
+        "title": "KITAS Investor",
+        "desc": "Izin tinggal untuk pemegang saham dan direktur asing.",
+        "timeline": "3–4 minggu"
+      }
+    ]
+  },
+  "serviceDetail": {
+    "tocHeading": "Di halaman ini",
+    "ctaBook": "Jadwalkan panggilan 30 menit",
+    "overview": "GAMBARAN",
+    "whoFor": "UNTUK SIAPA",
+    "requirements": "PERSYARATAN",
+    "timeline": "TIMELINE",
+    "cost": "BIAYA",
+    "faq": "TANYA JAWAB",
+    "regulationsCited": "REGULASI YANG DIRUJUK",
+    "timelineLabels": {
+      "we": "Kami tangani",
+      "joint": "Bersama",
+      "you": "Anda sediakan"
+    }
+  },
+  "pricing": {
+    "eyebrow": "BIAYA",
+    "headline": "Harga transparan. Tanpa biaya tersembunyi.",
+    "lead": "Biaya pemerintah dan biaya kami, baris per baris. Estimasi per Mei 2026.",
+    "tableHeaders": {
+      "service": "Layanan",
+      "govFee": "Biaya Pemerintah",
+      "ourFee": "Biaya Kami",
+      "total": "Total"
+    },
+    "starter": "Paket Starter",
+    "footnote": "Estimasi per Mei 2026. Tanpa biaya tersembunyi. Kuotasi khusus untuk sektor teregulasi.",
+    "ctaQuote": "Minta kuotasi khusus"
+  },
+  "about": {
+    "eyebrow": "TENTANG",
+    "headline": "Boutique Jakarta. Tenang, spesifik, akuntabel.",
+    "lead": "Kami mendirikan Jakarta Business Center untuk menghadirkan kejelasan editorial pada investasi asing langsung di Indonesia.",
+    "founderEyebrow": "DARI FOUNDER",
+    "founderNote": "Saat saya mendirikan Jakarta BC tahun 2019, sudah selusin kawan saya menyerah dari rencana usaha di Indonesia karena kejutan perizinan yang sebetulnya bisa dihindari. Premis firm ini sederhana: beri tahu investor apa yang sebenarnya dibutuhkan, dengan angka dan timeline nyata. Tanpa sandiwara. Diah Putri, Founder.",
+    "teamEyebrow": "TIM",
+    "team": [
+      {
+        "name": "Diah Putri",
+        "role": "Founder, Konsultan Senior"
+      },
+      {
+        "name": "Andi Wirawan",
+        "role": "Lead Pajak & Akuntansi"
+      },
+      {
+        "name": "Maya Hadi",
+        "role": "Lead Perizinan Sektoral"
+      }
+    ],
+    "licensesEyebrow": "LISENSI & REGISTRASI",
+    "licenses": [
+      "Konsultan Berlisensi BKPM — Reg 001/2025",
+      "Anggota PERADI Jakarta",
+      "Firma terdaftar ICAI"
+    ]
+  },
+  "insights": {
+    "eyebrow": "INSIGHT",
+    "headline": "Editorial tentang FDI Indonesia, dengan referensi.",
+    "lead": "Artikel long-form tentang regulasi, sektor, dan realitas operasional. Bukan listicle SEO.",
+    "empty": "Belum ada artikel. Berlangganan via footer untuk dapat notifikasi saat kami terbitkan."
+  },
+  "contact": {
+    "eyebrow": "KONTAK",
+    "headline": "Sampaikan kebutuhan Anda.",
+    "lead": "Kami balas dalam 1 hari kerja.",
+    "form": {
+      "name": "Nama",
+      "email": "Email",
+      "company": "Perusahaan (opsional)",
+      "message": "Pesan",
+      "submit": "Kirim",
+      "sending": "Mengirim…"
+    },
+    "successMessage": "Terima kasih. Kami balas dalam 1 hari kerja.",
+    "officeEyebrow": "KANTOR",
+    "officeAddress": "Sudirman Central Business District, Jakarta 12190, Indonesia"
+  },
+  "notFound": {
+    "headline": "Halaman tidak ditemukan.",
+    "lead": "Mungkin sudah dipindahkan, atau tautannya tidak benar.",
+    "home": "Beranda",
+    "services": "Layanan",
+    "insights": "Insight"
+  },
+  "errorPage": {
+    "headline": "Ada yang tidak berjalan di sisi kami.",
+    "lead": "Kami sudah dapat notifikasi. Bila mendesak, email langsung.",
+    "emailLabel": "hello@jakartabc.com"
   },
   "errors": {
     "notFoundTitle": "Halaman ini tidak ada di sini.",
