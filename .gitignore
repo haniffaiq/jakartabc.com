@@ -1,0 +1,36 @@
+# deps
+node_modules
+.pnpm-store
+
+# build
+.next
+dist
+out
+.turbo
+build
+*.tsbuildinfo
+
+# env
+.env
+.env.*.local
+.env.local
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editor
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# test
+coverage
+playwright-report
+test-results
+
+# payload
+apps/web/src/payload-types.ts
+apps/web/uploads
