@@ -29,4 +29,11 @@ for (const locale of ['en', 'id'] as const) {
     await expect(page.getByRole('heading', { name: /PT PMA/i })).toBeVisible()
     await expect(page.getByRole('navigation', { name: locale === 'en' ? 'On this page' : 'Di halaman ini' })).toBeVisible()
   })
+
+  test(`contact form fields @ ${locale}`, async ({ page }) => {
+    await page.goto(locale === 'en' ? '/contact' : '/id/contact')
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.locator('input[name="email"]')).toBeVisible()
+    await expect(page.locator('textarea[name="message"]')).toBeVisible()
+  })
 }

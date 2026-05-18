@@ -15,15 +15,9 @@
     "cta": "Jadwalkan konsultasi"
   },
   "footer": {
-    "address": [
-      "Sudirman Central Business District",
-      "Jakarta 12190, Indonesia"
-    ],
+    "address": ["Sudirman Central Business District", "Jakarta 12190, Indonesia"],
     "email": "hello@jakartabc.com",
-    "licenses": [
-      "Konsultan Berlisensi BKPM",
-      "PT PMA Terdaftar: 001/2025"
-    ]
+    "licenses": ["Konsultan Berlisensi BKPM", "PT PMA Terdaftar: 001/2025"]
   },
   "home": {
     "eyebrow": "INVESTASI ASING LANGSUNG · INDONESIA",
@@ -165,40 +159,19 @@
   },
   "contact": {
     "eyebrow": "KONTAK",
-    "headline": "Sampaikan kebutuhan Anda.",
-    "lead": "Kami balas dalam 1 hari kerja.",
+    "headline": "Ceritakan kebutuhan Anda.",
+    "lead": "Kami membalas dalam satu hari kerja.",
     "form": {
-      "name": "Nama",
+      "name": "Nama Anda",
       "email": "Email",
       "company": "Perusahaan (opsional)",
       "message": "Pesan",
       "submit": "Kirim",
       "sending": "Mengirim…"
     },
-    "successMessage": "Terima kasih. Kami balas dalam 1 hari kerja.",
+    "successMessage": "Terima kasih. Kami akan membalas dalam 1 hari kerja.",
     "officeEyebrow": "KANTOR",
     "officeAddress": "Sudirman Central Business District, Jakarta 12190, Indonesia"
-  },
-  "notFound": {
-    "headline": "Halaman tidak ditemukan.",
-    "lead": "Mungkin sudah dipindahkan, atau tautannya tidak benar.",
-    "home": "Beranda",
-    "services": "Layanan",
-    "insights": "Insight"
-  },
-  "errorPage": {
-    "headline": "Ada yang tidak berjalan di sisi kami.",
-    "lead": "Kami sudah dapat notifikasi. Bila mendesak, email langsung.",
-    "emailLabel": "hello@jakartabc.com"
-  },
-  "errors": {
-    "notFoundTitle": "Halaman ini tidak ada di sini.",
-    "notFoundBody": "Mungkin telah dipindahkan atau tautannya salah.",
-    "notFoundHome": "Kembali ke beranda",
-    "errorTitle": "Ada yang tidak berjalan di sisi kami.",
-    "errorBody": "Tim kami sudah diberi tahu. Anda juga bisa kontak langsung lewat email.",
-    "errorEmail": "Email hello@jakartabc.com",
-    "errorRetry": "Coba lagi"
   },
   "notFound": {
     "headline": "Halaman ini tidak ada di sini.",
@@ -212,5 +185,14 @@
     "headline": "Ada yang tidak berjalan di sisi kami.",
     "lead": "Tim kami sudah diberi tahu. Jika mendesak, email kami langsung.",
     "emailLabel": "hello@jakartabc.com"
+  },
+  "errors": {
+    "notFoundTitle": "Halaman ini tidak ada di sini.",
+    "notFoundBody": "Mungkin telah dipindahkan atau tautannya salah.",
+    "notFoundHome": "Kembali ke beranda",
+    "errorTitle": "Ada yang tidak berjalan di sisi kami.",
+    "errorBody": "Tim kami sudah diberi tahu. Anda juga bisa kontak langsung lewat email.",
+    "errorEmail": "Email hello@jakartabc.com",
+    "errorRetry": "Coba lagi"
   }
 }

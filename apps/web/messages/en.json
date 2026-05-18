@@ -87,5 +87,21 @@
       "Bar Association of Jakarta member",
       "ICAI registered firm"
     ]
+  },
+  "contact": {
+    "eyebrow": "CONTACT",
+    "headline": "Tell us what you need.",
+    "lead": "We reply within one business day.",
+    "form": {
+      "name": "Your name",
+      "email": "Email",
+      "company": "Company (optional)",
+      "message": "Message",
+      "submit": "Send",
+      "sending": "Sending…"
+    },
+    "successMessage": "Thanks. We'll reply within 1 business day.",
+    "officeEyebrow": "OFFICE",
+    "officeAddress": "Sudirman Central Business District, Jakarta 12190, Indonesia"
   }
 }
