@@ -20,3 +20,4 @@ export {
   type InsightCardLinkProps,
   type InsightCardProps,
 } from './components/InsightCard'
+export { EditorialQuote, type EditorialQuoteProps } from './components/EditorialQuote'
