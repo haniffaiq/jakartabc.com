@@ -1,0 +1,101 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: jakartabc
+          POSTGRES_PASSWORD: jakartabc
+          POSTGRES_DB: jakartabc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U jakartabc -d jakartabc"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://jakartabc:jakartabc@localhost:5432/jakartabc
+      PAYLOAD_SECRET: ci-secret-32-chars-minimum-padding-xx
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      DEFAULT_LOCALE: en
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect pnpm workspace
+        id: workspace
+        shell: bash
+        run: |
+          if [[ -f pnpm-lock.yaml && -f package.json ]]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Note skipped scaffold verification
+        if: steps.workspace.outputs.present != 'true'
+        shell: bash
+        run: |
+          echo "No pnpm workspace files found on this ref yet; skipping lint/typecheck/test/build."
+          echo "When Phase 0 scaffold lands with package.json and pnpm-lock.yaml, this workflow will run full verification."
+
+      - uses: actions/setup-node@v4
+        if: steps.workspace.outputs.present == 'true'
+        with:
+          node-version-file: .nvmrc
+
+      - uses: pnpm/action-setup@v4
+        if: steps.workspace.outputs.present == 'true'
+        with:
+          version: 9.12.3
+          run_install: false
+
+      - name: pnpm store path
+        if: steps.workspace.outputs.present == 'true'
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        if: steps.workspace.outputs.present == 'true'
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        if: steps.workspace.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        if: steps.workspace.outputs.present == 'true'
+        run: pnpm lint
+
+      - name: Typecheck
+        if: steps.workspace.outputs.present == 'true'
+        run: pnpm typecheck
+
+      - name: Unit tests
+        if: steps.workspace.outputs.present == 'true'
+        run: pnpm test
+
+      - name: Build
+        if: steps.workspace.outputs.present == 'true'
+        run: pnpm build
