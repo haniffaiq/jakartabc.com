@@ -9,7 +9,7 @@
     "start": "next start -p 3000",
     "lint": "next lint --dir src",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"(no unit tests in apps/web — see packages/ui)\" && exit 0",
+    "test": "vitest run",
     "test:e2e": "playwright test",
     "payload:generate-types": "payload generate:types"
   },
@@ -35,6 +35,7 @@
     "autoprefixer": "10.4.20",
     "postcss": "8.4.47",
     "tailwindcss": "3.4.13",
-    "typescript": "5.6.3"
+    "typescript": "5.6.3",
+    "vitest": "2.1.3"
   }
 }
