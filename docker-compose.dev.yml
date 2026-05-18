@@ -1,0 +1,22 @@
+name: jakartabc-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jakartabc
+      POSTGRES_PASSWORD: jakartabc
+      POSTGRES_DB: jakartabc
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jakartabc -d jakartabc"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata_dev:
