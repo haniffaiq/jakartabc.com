@@ -7,6 +7,18 @@
       "id": "ID"
     }
   },
+  "nav": {
+    "services": "Services",
+    "insights": "Insights",
+    "about": "About",
+    "pricing": "Pricing",
+    "cta": "Book a call"
+  },
+  "footer": {
+    "address": ["Sudirman Central Business District", "Jakarta 12190, Indonesia"],
+    "email": "hello@jakartabc.com",
+    "licenses": ["BKPM Licensed Consultant", "PT PMA Registered: 001/2025"]
+  },
   "home": {
     "eyebrow": "FOREIGN DIRECT INVESTMENT · INDONESIA",
     "headline": "Set up a PT PMA in Indonesia. Without the guesswork.",

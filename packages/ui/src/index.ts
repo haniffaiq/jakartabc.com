@@ -61,3 +61,4 @@ export {
   type TocItem,
   useScrollSpy,
 } from './components/StickyTOC'
+export { NavBar, type NavBarProps, type NavBarItem, type NavBarCta } from './components/NavBar'

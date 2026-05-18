@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation'
 import { NextIntlClientProvider } from 'next-intl'
 import { Fraunces, Inter } from 'next/font/google'
-import { getMessages, unstable_setRequestLocale } from 'next-intl/server'
+import { getMessages, getTranslations, unstable_setRequestLocale } from 'next-intl/server'
 
+import { LocalizedLayoutChrome } from '@/components/LocalizedLayoutChrome'
 import { routing, type Locale } from '@/i18n/routing'
 
 import '../globals.css'
@@ -37,12 +38,30 @@ export default async function LocaleLayout({
 
   unstable_setRequestLocale(locale)
   const messages = await getMessages()
+  const nav = await getTranslations('nav')
+  const footer = await getTranslations('footer')
 
   return (
     <html lang={locale} className={`${fraunces.variable} ${inter.variable}`}>
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
-          {children}
+          <LocalizedLayoutChrome
+            locale={locale as Locale}
+            nav={{
+              services: nav('services'),
+              insights: nav('insights'),
+              about: nav('about'),
+              pricing: nav('pricing'),
+              cta: nav('cta'),
+            }}
+            footer={{
+              address: footer.raw('address') as string[],
+              email: footer('email'),
+              licenses: footer.raw('licenses') as string[],
+            }}
+          >
+            {children}
+          </LocalizedLayoutChrome>
         </NextIntlClientProvider>
       </body>
     </html>
