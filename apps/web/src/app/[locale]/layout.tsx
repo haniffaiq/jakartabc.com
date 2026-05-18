@@ -8,6 +8,11 @@ import { routing, type Locale } from '@/i18n/routing'
 
 import '../globals.css'
 
+export const metadata = {
+  title: 'Jakarta Business Center',
+  description: 'Foreign company registration and market entry consulting in Indonesia.',
+}
+
 const fraunces = Fraunces({
   subsets: ['latin'],
   variable: '--font-display',
