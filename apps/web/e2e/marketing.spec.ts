@@ -1,8 +1,20 @@
 import { expect, test } from '@playwright/test'
 
 for (const locale of ['en', 'id'] as const) {
+  test(`home renders editorial list and quote @ ${locale}`, async ({ page }) => {
+    await page.goto(locale === 'en' ? '/' : '/id', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.locator('html')).toHaveAttribute('lang', locale)
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+    await expect(page.getByText('01')).toBeVisible()
+    await expect(page.getByText('04')).toBeVisible()
+    await expect(page.getByText('Maria Tanaka · Founder, Solstice KK')).toBeVisible()
+  })
+
   test(`insights empty state @ ${locale}`, async ({ page }) => {
-    await page.goto(locale === 'en' ? '/insights' : '/id/insights')
+    await page.goto(locale === 'en' ? '/insights' : '/id/insights', {
+      waitUntil: 'domcontentloaded',
+    })
     await expect(page.locator('html')).toHaveAttribute('lang', locale)
     await expect(page.getByRole('heading', { level: 1 })).toContainText(
       locale === 'en'
@@ -13,7 +25,7 @@ for (const locale of ['en', 'id'] as const) {
   })
 
   test(`about renders founder note dark band @ ${locale}`, async ({ page }) => {
-    await page.goto(locale === 'en' ? '/about' : '/id/about')
+    await page.goto(locale === 'en' ? '/about' : '/id/about', { waitUntil: 'domcontentloaded' })
 
     await expect(page.locator('html')).toHaveAttribute('lang', locale)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
