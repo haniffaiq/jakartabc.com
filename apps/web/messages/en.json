@@ -8,13 +8,42 @@
     }
   },
   "home": {
-    "eyebrow": "Foreign Direct Investment · Indonesia",
-    "headline": "Set up a PT PMA in Indonesia.",
-    "subheadline": "Without the guesswork.",
-    "lead": "Foreign-owned company registration, sector licensing, and ongoing compliance — handled by a Jakarta team.",
-    "ctaPrimary": "Book a 30-min call",
-    "ctaSecondary": "See how it works",
-    "placeholderNote": "Staging environment · full site lands in Phase 1."
+    "eyebrow": "FOREIGN DIRECT INVESTMENT · INDONESIA",
+    "headline": "Set up a PT PMA in Indonesia. Without the guesswork.",
+    "lead": "Foreign-owned company registration, sector licensing, and ongoing compliance — handled by a Jakarta team that has done it 400+ times.",
+    "primaryCta": "Book a 30-min call",
+    "secondaryCta": "See how it works",
+    "servicesEyebrow": "WHAT WE DO",
+    "servicesRead": "Read",
+    "services": [
+      {
+        "slug": "pt-pma-setup",
+        "title": "PT PMA Setup",
+        "desc": "Foreign-owned LLC registration, end to end.",
+        "timeline": "4–6 wks"
+      },
+      {
+        "slug": "sector-licensing",
+        "title": "Sector Licensing",
+        "desc": "OSS, KBLI, sector-specific permits.",
+        "timeline": "2–8 wks"
+      },
+      {
+        "slug": "tax-accounting",
+        "title": "Tax & Accounting",
+        "desc": "Monthly tax filing, payroll, annual reporting.",
+        "timeline": "ongoing"
+      },
+      {
+        "slug": "investor-kitas",
+        "title": "Investor KITAS",
+        "desc": "Residency for foreign shareholders and directors.",
+        "timeline": "3–4 wks"
+      }
+    ],
+    "quote": "They handled the BKPM filing in two weeks. No surprises in the fee at the end.",
+    "quoteAuthor": "Maria Tanaka",
+    "quoteRole": "Founder, Solstice KK"
   },
   "serviceDetail": {
     "tocHeading": "On this page",
