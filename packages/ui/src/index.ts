@@ -35,3 +35,10 @@ export {
   type EditorialListLinkProps,
   type EditorialListProps,
 } from './components/EditorialList'
+export {
+  StickyTOC,
+  type StickyTOCLinkProps,
+  type StickyTOCProps,
+  type TocItem,
+  useScrollSpy,
+} from './components/StickyTOC'
