@@ -24,5 +24,18 @@
     "errorBody": "We've been notified. You can also email us directly.",
     "errorEmail": "Email hello@jakartabc.com",
     "errorRetry": "Try again"
+  },
+  "notFound": {
+    "headline": "This page isn't here.",
+    "lead": "It may have been moved, or the link is incorrect.",
+    "home": "Home",
+    "services": "Services",
+    "insights": "Insights",
+    "navLabel": "Useful pages"
+  },
+  "errorPage": {
+    "headline": "Something on our end isn't working.",
+    "lead": "We've been notified. If urgent, email us directly.",
+    "emailLabel": "hello@jakartabc.com"
   }
 }
