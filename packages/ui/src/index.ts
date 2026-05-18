@@ -36,6 +36,12 @@ export {
 } from './components/MobileMenu'
 export { PricingTable, type PricingRow, type PricingTableProps } from './components/PricingTable'
 export { Hero, type HeroAction, type HeroLinkProps, type HeroProps } from './components/Hero'
+export { Eyebrow, type EyebrowProps } from './components/Eyebrow'
+export {
+  DisplayHeading,
+  type DisplayHeadingProps,
+} from './components/DisplayHeading'
+export { RuleDivider, type RuleDividerProps } from './components/RuleDivider'
 export {
   FooterBlock,
   type FooterBlockLegalLink,
