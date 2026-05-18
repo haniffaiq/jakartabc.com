@@ -1,13 +1,25 @@
 import { expect, test } from '@playwright/test'
 
 for (const locale of ['en', 'id'] as const) {
+  test(`renders nav and footer chrome @ ${locale}`, async ({ page }) => {
+    await page.goto(locale === 'en' ? '/' : '/id', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible()
+    await expect(page.getByRole('contentinfo')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'jakartabc' }).first()).toBeVisible()
+    await expect(
+      page.getByRole('link', { name: locale === 'en' ? 'Services' : 'Layanan' }),
+    ).toBeVisible()
+    await expect(page.getByRole('link', { name: /hello@jakartabc\.com/i })).toBeVisible()
+  })
+
   test(`home renders editorial list and quote @ ${locale}`, async ({ page }) => {
     await page.goto(locale === 'en' ? '/' : '/id', { waitUntil: 'domcontentloaded' })
 
     await expect(page.locator('html')).toHaveAttribute('lang', locale)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
-    await expect(page.getByText('01')).toBeVisible()
-    await expect(page.getByText('04')).toBeVisible()
+    await expect(page.locator('span').filter({ hasText: /^01$/ }).first()).toBeVisible()
+    await expect(page.locator('span').filter({ hasText: /^04$/ }).first()).toBeVisible()
     await expect(page.getByText('Maria Tanaka · Founder, Solstice KK')).toBeVisible()
   })
 
@@ -64,8 +76,8 @@ for (const locale of ['en', 'id'] as const) {
         ? 'Foreign direct investment in Indonesia, end to end.'
         : 'Investasi asing langsung di Indonesia, end-to-end.',
     )
-    await expect(page.getByText('01')).toBeVisible()
-    await expect(page.getByText('04')).toBeVisible()
+    await expect(page.locator('span').filter({ hasText: /^01$/ }).first()).toBeVisible()
+    await expect(page.locator('span').filter({ hasText: /^04$/ }).first()).toBeVisible()
     await expect(
       page.getByText(locale === 'en' ? 'PT PMA Setup' : 'Pendirian PT PMA'),
     ).toBeVisible()
