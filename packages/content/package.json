@@ -9,11 +9,12 @@
     ".": "./src/index.ts",
     "./collections/*": "./src/collections/*.ts",
     "./globals/*": "./src/globals/*.ts",
-    "./collections/*": "./src/collections/*.ts",
+    "./blocks/*": "./src/blocks/*.ts",
     "./hooks/*": "./src/hooks/*.ts",
     "./generated/payload-types": "./src/generated/payload-types.ts"
   },
   "scripts": {
+    "generate:types": "cd ../../apps/web && payload generate:types --config src/payload.config.ts && cp src/payload-types.ts ../../packages/content/src/generated/payload-types.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
