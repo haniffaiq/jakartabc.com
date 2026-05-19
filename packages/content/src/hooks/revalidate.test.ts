@@ -15,7 +15,7 @@ describe('makeGlobalRevalidateHook', () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
     vi.stubGlobal('fetch', fetchMock)
 
-    await makeGlobalRevalidateHook(() => ['site:footer'])({})
+    await makeGlobalRevalidateHook(() => ['site:nav'])({})
 
     expect(fetchMock).toHaveBeenCalledWith(new URL('/api/revalidate', 'https://jakartabc.test'), {
       method: 'POST',
@@ -23,7 +23,7 @@ describe('makeGlobalRevalidateHook', () => {
         'content-type': 'application/json',
         'x-revalidate-secret': 'test-secret',
       },
-      body: JSON.stringify({ tags: ['site:footer'] }),
+      body: JSON.stringify({ tags: ['site:nav'] }),
     })
   })
 
@@ -34,7 +34,7 @@ describe('makeGlobalRevalidateHook', () => {
     const warn = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
-    await makeGlobalRevalidateHook(() => ['site:footer'])({ req: { payload: { logger: { warn } } } })
+    await makeGlobalRevalidateHook(() => ['site:nav'])({ req: { payload: { logger: { warn } } } })
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('Skipping revalidate'))
