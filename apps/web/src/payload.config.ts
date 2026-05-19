@@ -73,6 +73,7 @@ export default buildConfig({
     pool: {
       connectionString: env.DATABASE_URL,
     },
+    ...(process.env.PAYLOAD_FORCE_PUSH === 'true' ? { push: true } : {}),
   }),
   upload: {
     limits: { fileSize: 5_000_000 },

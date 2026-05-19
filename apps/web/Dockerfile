@@ -34,6 +34,35 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
+# Build-time env (next build imports src/env.ts which zod-validates)
+ARG DATABASE_URL
+ARG PAYLOAD_SECRET
+ARG NEXT_PUBLIC_SITE_URL
+ARG DEFAULT_LOCALE=en
+ARG REVALIDATE_SECRET
+ARG EMAIL_PROVIDER=resend
+ARG RESEND_API_KEY
+ARG EMAIL_FROM
+ARG SALES_EMAIL
+ARG TURNSTILE_SECRET_KEY
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ENV DATABASE_URL=$DATABASE_URL \
+    PAYLOAD_SECRET=$PAYLOAD_SECRET \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    DEFAULT_LOCALE=$DEFAULT_LOCALE \
+    REVALIDATE_SECRET=$REVALIDATE_SECRET \
+    EMAIL_PROVIDER=$EMAIL_PROVIDER \
+    RESEND_API_KEY=$RESEND_API_KEY \
+    EMAIL_FROM=$EMAIL_FROM \
+    SALES_EMAIL=$SALES_EMAIL \
+    TURNSTILE_SECRET_KEY=$TURNSTILE_SECRET_KEY \
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY \
+    PAYLOAD_FORCE_PUSH=true
+
+# NODE_ENV=development bypasses drizzle's prod-mode skip on pushDevSchema.
+# This is acceptable for a build-time, one-shot schema sync. Switch to
+# `payload migrate` once apps/web/src/migrations/* is generated and committed.
+RUN NODE_ENV=development pnpm --filter @jakartabc/web exec tsx scripts/db-push.ts
 RUN pnpm --filter @jakartabc/web build
 
 # ---- Stage 3: runtime ----

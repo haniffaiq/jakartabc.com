@@ -113,12 +113,19 @@ function getTimelineSteps(service: ServiceDetail) {
 }
 
 export async function generateStaticParams() {
-  const payload = await getServicesClient()
-  const services = await payload.find({ collection: 'services', sort: 'order', limit: 100 })
+  // Defensive: if DB is unreachable at build time (e.g. CI without postgres),
+  // skip SSG and let pages render on-demand at runtime.
+  try {
+    const payload = await getServicesClient()
+    const services = await payload.find({ collection: 'services', sort: 'order', limit: 100 })
 
-  return routing.locales.flatMap((locale) =>
-    services.docs.map((service) => ({ locale, slug: service.slug })),
-  )
+    return routing.locales.flatMap((locale) =>
+      services.docs.map((service) => ({ locale, slug: service.slug })),
+    )
+  } catch (err) {
+    console.warn('[services/[slug]] generateStaticParams skipped — DB unavailable:', err)
+    return []
+  }
 }
 
 export default async function ServiceDetailPage({
