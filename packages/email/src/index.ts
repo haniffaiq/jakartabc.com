@@ -1,2 +1,7 @@
-export type { SendArgs, SendResult } from './send'
+export { subjects } from './i18n'
 export { sendEmail } from './send'
+export type { SendArgs, SendResult } from './send'
+export { BookingLeadSales } from './templates/BookingLeadSales'
+export { BookingLeadVisitor } from './templates/BookingLeadVisitor'
+export { ContactSales } from './templates/ContactSales'
+export { ContactVisitor } from './templates/ContactVisitor'
