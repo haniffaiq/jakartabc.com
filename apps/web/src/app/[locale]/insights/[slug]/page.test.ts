@@ -6,6 +6,7 @@ describe('insight detail page helpers', () => {
   it('formats publication dates with locale-aware short months in UTC', () => {
     expect(formatInsightDate('2026-05-10', 'en')).toBe('May 10, 2026')
     expect(formatInsightDate('2026-05-10', 'id')).toBe('10 Mei 2026')
+    expect(formatInsightDate('2026-05-10T00:00:00.000Z', 'en')).toBe('May 10, 2026')
   })
 
   it('keys cached insight lookups by locale and slug', () => {
