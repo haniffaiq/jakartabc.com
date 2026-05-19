@@ -3,21 +3,13 @@ import { fileURLToPath } from 'node:url'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { buildConfig } from 'payload'
-import { SiteSettings } from './collections/SiteSettings'
-import { env } from './env'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
 export default buildConfig({
-  serverURL: env.NEXT_PUBLIC_SITE_URL,
-  admin: {
-    user: 'users',
-    meta: {
-      titleSuffix: ' · Jakarta BC Admin',
-    },
-  },
-  editor: lexicalEditor({}),
+  serverURL: process.env.NEXT_PUBLIC_PORTAL_URL,
+  admin: { disabled: true },
   collections: [
     {
       slug: 'users',
@@ -39,22 +31,8 @@ export default buildConfig({
       ],
     },
   ],
-  globals: [SiteSettings],
-  localization: {
-    locales: ['en', 'id'],
-    defaultLocale: 'en',
-    fallback: true,
-  },
-  secret: env.PAYLOAD_SECRET,
-  typescript: {
-    outputFile: path.resolve(dirname, 'payload-types.ts'),
-  },
-  db: postgresAdapter({
-    pool: {
-      connectionString: env.DATABASE_URL,
-    },
-  }),
-  upload: {
-    limits: { fileSize: 5_000_000 },
-  },
+  editor: lexicalEditor({}),
+  secret: process.env.PORTAL_PAYLOAD_SECRET!,
+  typescript: { outputFile: path.resolve(dirname, 'payload-types.ts') },
+  db: postgresAdapter({ pool: { connectionString: process.env.DATABASE_URL } }),
 })
