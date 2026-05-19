@@ -1,0 +1,27 @@
+{
+  "name": "@jakartabc/email",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./send": "./src/send.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "nodemailer": "6.9.16",
+    "resend": "4.0.1"
+  },
+  "devDependencies": {
+    "@jakartabc/config": "workspace:*",
+    "@types/node": "22.10.2",
+    "@types/nodemailer": "6.4.16",
+    "typescript": "5.6.3",
+    "vitest": "2.1.3"
+  }
+}
