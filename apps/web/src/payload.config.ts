@@ -47,7 +47,7 @@ export default buildConfig({
   },
   secret: env.PAYLOAD_SECRET,
   typescript: {
-    outputFile: path.resolve(dirname, 'payload-types.ts'),
+    outputFile: path.resolve(dirname, '../../../packages/content/src/generated/payload-types.ts'),
   },
   db: postgresAdapter({
     pool: {
