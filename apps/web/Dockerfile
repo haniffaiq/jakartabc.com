@@ -10,6 +10,8 @@ WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY packages/config/package.json packages/config/package.json
 COPY packages/ui/package.json packages/ui/package.json
+COPY packages/content/package.json packages/content/package.json
+COPY packages/email/package.json packages/email/package.json
 COPY apps/web/package.json apps/web/package.json
 
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
@@ -24,6 +26,8 @@ WORKDIR /repo
 COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/packages/config/node_modules ./packages/config/node_modules
 COPY --from=deps /repo/packages/ui/node_modules ./packages/ui/node_modules
+COPY --from=deps /repo/packages/content/node_modules ./packages/content/node_modules
+COPY --from=deps /repo/packages/email/node_modules ./packages/email/node_modules
 COPY --from=deps /repo/apps/web/node_modules ./apps/web/node_modules
 COPY . .
 
