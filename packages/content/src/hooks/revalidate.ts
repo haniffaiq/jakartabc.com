@@ -1,26 +1,34 @@
+import type { CollectionAfterChangeHook, GlobalAfterChangeHook } from 'payload'
+
+type RevalidateLogger = {
+  info?: (message: string) => void
+  warn?: (message: string) => void
+  error?: (message: string) => void
+}
+
 type RevalidateContext = {
   req?: {
     payload?: {
-      logger?: {
-        info?: (message: string) => void
-        warn?: (message: string) => void
-      }
+      logger?: RevalidateLogger
     }
   }
 }
 
-export const makeGlobalRevalidateHook = (getTags: () => string[]) => {
-  return async ({ req }: RevalidateContext = {}) => {
-    const tags = getTags()
-    const secret = process.env.REVALIDATE_SECRET
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+const getLogger = (context?: RevalidateContext) => context?.req?.payload?.logger
 
-    if (!secret || !siteUrl) {
-      req?.payload?.logger?.warn?.('Skipping revalidate: REVALIDATE_SECRET or NEXT_PUBLIC_SITE_URL is not configured')
-      return
-    }
+const postRevalidate = async (tags: string[], logger?: RevalidateLogger) => {
+  const secret = process.env.REVALIDATE_SECRET
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
 
-    const endpoint = new URL('/api/revalidate', siteUrl)
+  if (!secret || !siteUrl) {
+    logger?.warn?.(
+      'Skipping revalidate: REVALIDATE_SECRET or NEXT_PUBLIC_SITE_URL is not configured',
+    )
+    return
+  }
+
+  try {
+    const endpoint = new URL('/api/revalidate', siteUrl).toString()
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -31,9 +39,31 @@ export const makeGlobalRevalidateHook = (getTags: () => string[]) => {
     })
 
     if (!response.ok) {
-      throw new Error(`Revalidate failed with status ${response.status}`)
+      logger?.warn?.(`Revalidate failed with status ${response.status}`)
+      return
     }
 
-    req?.payload?.logger?.info?.(`Revalidated ${tags.join(', ')}`)
+    logger?.info?.(`Revalidated ${tags.join(', ')}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger?.error?.(`Revalidate request failed: ${message}`)
+  }
+}
+
+export function makeRevalidateHook<TDoc = unknown>(
+  buildTags: (doc: TDoc) => string[],
+): CollectionAfterChangeHook {
+  return async ({ doc, req }) => {
+    await postRevalidate(buildTags(doc as TDoc), getLogger({ req }))
+    return doc
+  }
+}
+
+export function makeGlobalRevalidateHook<TDoc = unknown>(
+  buildTags: (doc?: TDoc) => string[],
+): GlobalAfterChangeHook {
+  return async ({ doc, req }) => {
+    await postRevalidate(buildTags(doc as TDoc | undefined), getLogger({ req }))
+    return doc
   }
 }
