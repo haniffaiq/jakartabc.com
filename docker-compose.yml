@@ -11,7 +11,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jakartabc} -d ${POSTGRES_DB:-jakartabc}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-jakartabc} -d ${POSTGRES_DB:-jakartabc}']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -37,7 +37,26 @@ services:
     networks:
       - internal
     expose:
-      - "3000"
+      - '3000'
+
+  portal:
+    build:
+      context: .
+      dockerfile: apps/portal/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PORTAL_PAYLOAD_SECRET: ${PORTAL_PAYLOAD_SECRET}
+      PORTAL_COOKIE_DOMAIN: ${PORTAL_COOKIE_DOMAIN}
+      NEXT_PUBLIC_PORTAL_URL: ${NEXT_PUBLIC_PORTAL_URL}
+    networks:
+      - internal
+    expose:
+      - '3001'
 
   caddy:
     image: caddy:2-alpine
@@ -45,8 +64,8 @@ services:
     depends_on:
       - web
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
