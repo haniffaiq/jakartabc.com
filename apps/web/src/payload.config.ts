@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { buildConfig } from 'payload'
-import { SiteSettings } from './collections/SiteSettings'
+import { Footer, SiteSettings } from '@jakartabc/content'
 import { env } from './env'
 
 const filename = fileURLToPath(import.meta.url)
@@ -39,7 +39,7 @@ export default buildConfig({
       ],
     },
   ],
-  globals: [SiteSettings],
+  globals: [SiteSettings, Footer],
   localization: {
     locales: ['en', 'id'],
     defaultLocale: 'en',
