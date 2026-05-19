@@ -1,45 +1,18 @@
 import { getTranslations, unstable_setRequestLocale } from 'next-intl/server'
 
-import { BookingFormWired } from '@/components/BookingFormWired'
-import { getPayloadClient } from '@/lib/payload'
+import { ContactFormWired } from '@/components/ContactFormWired'
 
 type Locale = 'en' | 'id'
 
-type ServiceOption = {
-  slug: string
-  name?: string | null
-}
-
-type PayloadServicesClient = {
-  find(args: {
-    collection: 'services'
-    sort?: string
-    locale?: Locale
-    limit: number
-  }): Promise<{ docs: ServiceOption[] }>
-}
-
-function bookingLabels(locale: Locale, t: Awaited<ReturnType<typeof getTranslations>>) {
+function contactLabels(t: Awaited<ReturnType<typeof getTranslations>>) {
   return {
     name: t('form.name'),
     email: t('form.email'),
     company: t('form.company'),
-    phone: locale === 'en' ? 'Phone' : 'Telepon',
-    service: locale === 'en' ? 'Service' : 'Layanan',
-    preferredWindows: locale === 'en' ? 'Preferred times' : 'Waktu yang disukai',
     message: t('form.message'),
     submit: t('form.submit'),
     sending: t('form.sending'),
   }
-}
-
-async function getBookingServices(locale: Locale) {
-  const payload = (await getPayloadClient()) as unknown as PayloadServicesClient
-  const servicesRes = await payload.find({ collection: 'services', sort: 'order', locale, limit: 50 })
-
-  return servicesRes.docs
-    .filter((service): service is { slug: string; name: string } => Boolean(service.slug && service.name))
-    .map((service) => ({ slug: service.slug, name: service.name }))
 }
 
 export default async function ContactPage({ params }: { params: Promise<{ locale: Locale }> }) {
@@ -47,7 +20,6 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
   unstable_setRequestLocale(locale)
 
   const t = await getTranslations('contact')
-  const services = await getBookingServices(locale)
 
   return (
     <main className="mx-auto max-w-container px-24 py-96 md:py-128">
@@ -64,9 +36,8 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
         </div>
 
         <div className="border border-rule-soft bg-bone-100 p-32">
-          <BookingFormWired
-            labels={bookingLabels(locale, t)}
-            services={services}
+          <ContactFormWired
+            labels={contactLabels(t)}
             locale={locale}
             successMessage={t('successMessage')}
           />
