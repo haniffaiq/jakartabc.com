@@ -6,6 +6,7 @@ import { buildConfig } from 'payload'
 import {
   Authors,
   Categories,
+  ContactMessages,
   Footer,
   Insights,
   Media,
@@ -35,6 +36,7 @@ export default buildConfig({
     Insights,
     Regulations,
     Services,
+    ContactMessages,
     {
       slug: 'users',
       auth: {
