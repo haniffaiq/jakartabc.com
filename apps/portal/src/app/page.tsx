@@ -1,8 +1,11 @@
-export default function PortalScaffoldPage() {
-  return (
-    <main>
-      <h1>Jakarta Business Center client portal</h1>
-      <p>Portal package scaffold is ready. Login and dashboard routes are added in the next Phase 4 tasks.</p>
-    </main>
-  )
+import { redirect } from 'next/navigation'
+
+import { getCurrentUser } from '@/lib/auth'
+
+export default async function PortalRoot() {
+  const user = await getCurrentUser()
+
+  if (user) redirect('/dashboard')
+
+  redirect('/login')
 }
