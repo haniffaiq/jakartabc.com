@@ -5,7 +5,8 @@ export const BookingLeads: CollectionConfig = {
   admin: {
     group: 'Sales',
     useAsTitle: 'name',
-    defaultColumns: ['createdAt', 'name', 'company', 'service', 'status'],
+    defaultColumns: ['createdAt', 'name', 'company', 'service', 'preferredWindows', 'status'],
+    listSearchableFields: ['name', 'email', 'company'],
   },
   access: {
     create: () => true,

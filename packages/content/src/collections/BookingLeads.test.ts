@@ -24,6 +24,15 @@ describe('BookingLeads collection', () => {
     )
   })
 
+  it('surfaces sales-friendly columns and searchable lead identifiers in admin', () => {
+    expect(BookingLeads.admin).toMatchObject({
+      group: 'Sales',
+      useAsTitle: 'name',
+      defaultColumns: ['createdAt', 'name', 'company', 'service', 'preferredWindows', 'status'],
+      listSearchableFields: ['name', 'email', 'company'],
+    })
+  })
+
   it('allows public create and restricts read/update/delete to authenticated admin users', () => {
     const access = BookingLeads.access!
     const anonymousRequest = { req: { user: undefined } } as any
