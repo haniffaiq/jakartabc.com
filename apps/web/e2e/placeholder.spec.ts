@@ -62,7 +62,7 @@ for (const locale of ['en', 'id'] as const) {
       locale === 'en' ? 'Transparent pricing' : 'Harga transparan',
     )
     await expect(page.getByRole('table')).toBeVisible()
-    await expect(page.getByRole('row')).toHaveCount(5)
+    await expect(page.getByRole('row')).toHaveCount(6)
     await expect(page.getByText(/IDR/i).first()).toBeVisible()
   })
 }

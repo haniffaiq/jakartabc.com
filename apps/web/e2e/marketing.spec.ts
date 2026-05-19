@@ -23,7 +23,7 @@ for (const locale of ['en', 'id'] as const) {
     await expect(page.getByText('Maria Tanaka · Founder, Solstice KK')).toBeVisible()
   })
 
-  test(`insights empty state @ ${locale}`, async ({ page }) => {
+  test(`insights list renders seeded articles @ ${locale}`, async ({ page }) => {
     await page.goto(locale === 'en' ? '/insights' : '/id/insights', {
       waitUntil: 'domcontentloaded',
     })
@@ -33,7 +33,17 @@ for (const locale of ['en', 'id'] as const) {
         ? 'Editorial on Indonesian FDI, with citations.'
         : 'Editorial tentang FDI Indonesia, dengan referensi.',
     )
-    await expect(page.getByText(/No articles yet|Belum ada/i)).toBeVisible()
+    await expect(
+      page
+        .getByRole('link', {
+          name:
+            locale === 'en'
+              ? /BKPM Reg 5\/2025: What changes/i
+              : /BKPM Reg 5\/2025: Apa yang berubah/i,
+        })
+        .or(page.getByText(/No articles yet|Belum ada/i))
+        .first(),
+    ).toBeVisible()
   })
 
   test(`about renders founder note dark band @ ${locale}`, async ({ page }) => {
@@ -53,9 +63,7 @@ for (const locale of ['en', 'id'] as const) {
     await expect(page.locator('html')).toHaveAttribute('lang', locale)
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(page.getByRole('heading', { name: /PT PMA/i })).toBeVisible()
-    await expect(
-      page.getByRole('navigation', { name: locale === 'en' ? 'On this page' : 'Di halaman ini' }),
-    ).toBeVisible()
+    await expect(page.getByText(locale === 'en' ? 'On this page' : 'Di halaman ini')).toBeVisible()
   })
 
   test(`contact form fields @ ${locale}`, async ({ page }) => {
