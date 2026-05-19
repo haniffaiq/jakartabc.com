@@ -90,6 +90,9 @@ importers:
       '@jakartabc/content':
         specifier: workspace:*
         version: link:../../packages/content
+      '@jakartabc/email':
+        specifier: workspace:*
+        version: link:../../packages/email
       '@jakartabc/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -102,6 +105,9 @@ importers:
       '@payloadcms/richtext-lexical':
         specifier: 3.0.0
         version: 3.0.0(dqzynkntna4hfzdfui5l6yjqdq)
+      '@react-email/components':
+        specifier: ^0.0.30
+        version: 0.0.30(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       lru-cache:
         specifier: ^11.4.0
         version: 11.4.0
