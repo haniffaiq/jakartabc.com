@@ -212,5 +212,11 @@
     "errorBody": "Tim kami sudah diberi tahu. Anda juga bisa kontak langsung lewat email.",
     "errorEmail": "Email hello@jakartabc.com",
     "errorRetry": "Coba lagi"
+  },
+  "insightDetail": {
+    "minRead": "menit baca",
+    "byline": "Oleh",
+    "regulationsCited": "REGULASI YANG DIRUJUK",
+    "relatedHeading": "Kembali ke insight"
   }
 }

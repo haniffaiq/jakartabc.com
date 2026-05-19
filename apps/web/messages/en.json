@@ -212,5 +212,11 @@
         "timeline": "3–4 wks"
       }
     ]
+  },
+  "insightDetail": {
+    "minRead": "min read",
+    "byline": "By",
+    "regulationsCited": "REGULATIONS CITED",
+    "relatedHeading": "Back to insights"
   }
 }
