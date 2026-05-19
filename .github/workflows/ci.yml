@@ -35,6 +35,9 @@ jobs:
       PAYLOAD_SECRET: ci-secret-32-chars-minimum-padding-xx
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
       DEFAULT_LOCALE: en
+      PORTAL_PAYLOAD_SECRET: ci-portal-secret-32-chars-min-padding
+      PORTAL_COOKIE_DOMAIN: localhost
+      NEXT_PUBLIC_PORTAL_URL: http://localhost:3001
 
     steps:
       - uses: actions/checkout@v4
@@ -92,10 +95,14 @@ jobs:
         if: steps.workspace.outputs.present == 'true'
         run: pnpm typecheck
 
-      - name: Unit tests
+      - name: Unit tests (workspace, includes portal)
         if: steps.workspace.outputs.present == 'true'
         run: pnpm test
 
-      - name: Build
+      - name: Build portal app
         if: steps.workspace.outputs.present == 'true'
-        run: pnpm build
+        run: pnpm --filter @jakartabc/portal build
+
+      - name: Build web app
+        if: steps.workspace.outputs.present == 'true'
+        run: pnpm --filter @jakartabc/web build
