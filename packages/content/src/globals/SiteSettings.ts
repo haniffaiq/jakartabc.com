@@ -3,6 +3,7 @@ import type { GlobalConfig } from 'payload'
 export const SiteSettings: GlobalConfig = {
   slug: 'site-settings',
   label: { en: 'Site Settings', id: 'Pengaturan Situs' },
+  admin: { group: 'Site' },
   access: {
     read: () => true,
   },
