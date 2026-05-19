@@ -5,6 +5,7 @@ import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { buildConfig } from 'payload'
 import {
   Authors,
+  BookingLeads,
   Categories,
   ContactMessages,
   Footer,
@@ -37,6 +38,7 @@ export default buildConfig({
     Regulations,
     Services,
     ContactMessages,
+    BookingLeads,
     {
       slug: 'users',
       auth: {
