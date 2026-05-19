@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const loginMock = vi.fn()
-const authMock = vi.fn(async (_args?: { headers: Headers }): Promise<{ user: unknown | null }> => ({ user: null }))
+const authMock = vi.fn(
+  async (_args?: { headers: Headers }): Promise<{ user: unknown | null }> => ({ user: null }),
+)
 const cookieStoreSet = vi.fn()
 const cookieStoreGet = vi.fn()
 const cookieStoreDelete = vi.fn()
@@ -63,6 +65,16 @@ describe('auth Server Actions', () => {
 
   it('returns invalid when Payload rejects credentials', async () => {
     loginMock.mockRejectedValue(new Error('Invalid credentials'))
+    const formData = new FormData()
+    formData.set('email', 'u@x.co')
+    formData.set('password', 'wrong')
+
+    await expect(loginAction(null, formData)).resolves.toEqual({ ok: false, error: 'invalid' })
+    expect(cookieStoreSet).not.toHaveBeenCalled()
+  })
+
+  it('returns invalid when Payload reports incorrect credentials', async () => {
+    loginMock.mockRejectedValue(new Error('The email or password provided is incorrect.'))
     const formData = new FormData()
     formData.set('email', 'u@x.co')
     formData.set('password', 'wrong')

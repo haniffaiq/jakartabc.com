@@ -8,9 +8,7 @@ import { getPayloadClient } from '@/lib/payload'
 const COOKIE_NAME = 'jbc_portal_session'
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14
 
-export type LoginResult =
-  | { ok: true }
-  | { ok: false; error: 'validation' | 'invalid' | 'server' }
+export type LoginResult = { ok: true } | { ok: false; error: 'validation' | 'invalid' | 'server' }
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -56,7 +54,7 @@ export async function loginAction(
 
     return { ok: true }
   } catch (error) {
-    if (error instanceof Error && /invalid/i.test(error.message)) {
+    if (error instanceof Error && /invalid|incorrect/i.test(error.message)) {
       return { ok: false, error: 'invalid' }
     }
 
