@@ -55,7 +55,7 @@ export function NavBar({
         className,
       )}
     >
-      <div className="mx-auto flex h-full max-w-container items-center justify-between px-6 md:px-10">
+      <div className="mx-auto flex h-full max-w-container items-center justify-between px-24 md:px-48">
         <Link
           href="/"
           className="font-display text-xl font-extrabold uppercase tracking-[0.08em] text-navy-900 hover:text-navy-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600"
@@ -63,12 +63,12 @@ export function NavBar({
           {brand}
         </Link>
 
-        <ul className="hidden gap-8 md:flex">
+        <ul className="hidden gap-32 md:flex">
           {items.map((item) => (
             <li key={item.href}>
               <Link
                 href={item.href}
-                className="text-body-md text-ink-900 underline-offset-4 hover:text-navy-700 hover:underline active:text-navy-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600"
+                className="text-body-md font-medium text-ink-700 underline-offset-8 hover:text-navy-700 hover:underline active:text-navy-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600"
               >
                 {item.label}
               </Link>
@@ -76,7 +76,7 @@ export function NavBar({
           ))}
         </ul>
 
-        <div className="hidden items-center gap-4 md:flex">
+        <div className="hidden items-center gap-16 md:flex">
           <button
             type="button"
             onClick={() => onLocaleChange(next)}

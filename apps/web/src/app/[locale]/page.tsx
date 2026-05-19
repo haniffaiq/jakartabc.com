@@ -31,7 +31,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const services = t.raw('services') as HomeService[]
 
   return (
-    <main className="bg-bone-50">
+    <div className="bg-bone-50">
       {/* Hero — navy gradient with skyline silhouette */}
       <section className="relative overflow-hidden bg-navy-900 text-bone-50">
         <div
@@ -45,11 +45,10 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
         />
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-32 opacity-25"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[120px]"
           style={{
             backgroundImage:
-              'linear-gradient(to top, rgba(0,0,0,0.55), transparent),' +
-              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'><path fill='%230b1e3f' d='M0 120 L0 80 L40 80 L40 60 L70 60 L70 40 L100 40 L100 75 L140 75 L140 50 L160 50 L160 30 L185 30 L185 70 L215 70 L215 55 L245 55 L245 35 L270 35 L270 75 L305 75 L305 45 L335 45 L335 25 L360 25 L360 80 L400 80 L400 60 L430 60 L430 35 L460 35 L460 70 L490 70 L490 50 L520 50 L520 30 L550 30 L550 78 L580 78 L580 55 L610 55 L610 40 L640 40 L640 65 L670 65 L670 30 L700 30 L700 72 L730 72 L730 55 L760 55 L760 35 L790 35 L790 80 L820 80 L820 50 L850 50 L850 30 L880 30 L880 70 L910 70 L910 55 L940 55 L940 38 L970 38 L970 75 L1000 75 L1000 50 L1030 50 L1030 30 L1060 30 L1060 70 L1090 70 L1090 55 L1120 55 L1120 35 L1150 35 L1150 75 L1200 75 L1200 120 Z'/></svg>\")",
+              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'><path fill='%23173a73' opacity='0.65' d='M0 120 L0 80 L40 80 L40 60 L70 60 L70 40 L100 40 L100 75 L140 75 L140 50 L160 50 L160 30 L185 30 L185 70 L215 70 L215 55 L245 55 L245 35 L270 35 L270 75 L305 75 L305 45 L335 45 L335 25 L360 25 L360 80 L400 80 L400 60 L430 60 L430 35 L460 35 L460 70 L490 70 L490 50 L520 50 L520 30 L550 30 L550 78 L580 78 L580 55 L610 55 L610 40 L640 40 L640 65 L670 65 L670 30 L700 30 L700 72 L730 72 L730 55 L760 55 L760 35 L790 35 L790 80 L820 80 L820 50 L850 50 L850 30 L880 30 L880 70 L910 70 L910 55 L940 55 L940 38 L970 38 L970 75 L1000 75 L1000 50 L1030 50 L1030 30 L1060 30 L1060 70 L1090 70 L1090 55 L1120 55 L1120 35 L1150 35 L1150 75 L1200 75 L1200 120 Z'/></svg>\")",
             backgroundRepeat: 'repeat-x',
             backgroundPosition: 'bottom',
             backgroundSize: '1200px 120px',
@@ -80,14 +79,17 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       </section>
 
       {/* Stats strip */}
-      <section className="border-b border-rule-soft bg-bone-50">
-        <div className="mx-auto grid max-w-container grid-cols-2 gap-px overflow-hidden bg-rule-soft md:grid-cols-4">
+      <section className="border-b border-rule-firm bg-bone-50">
+        <div className="mx-auto grid max-w-container grid-cols-2 divide-x divide-y divide-rule-firm md:grid-cols-4 md:divide-y-0">
           {stats.map((s) => (
-            <div key={s.label} className="flex flex-col items-start gap-8 bg-bone-50 px-24 py-32 md:px-32 md:py-48">
-              <span className="font-display text-display-md font-bold tracking-tight text-navy-900">
+            <div
+              key={s.label}
+              className="flex flex-col items-start gap-8 px-24 py-32 md:px-32 md:py-48"
+            >
+              <span className="font-display text-display-md font-extrabold tracking-tight text-navy-900">
                 {s.value}
               </span>
-              <span className="text-body-sm font-medium uppercase tracking-[0.08em] text-ink-500">
+              <span className="text-body-sm font-semibold uppercase tracking-[0.12em] text-ink-500">
                 {s.label}
               </span>
             </div>
@@ -157,8 +159,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       </section>
 
       {/* Final CTA */}
-      <section className="border-t border-rule-soft bg-bone-100 px-24 py-96 md:px-48 md:py-128">
-        <div className="mx-auto flex max-w-container flex-col items-start justify-between gap-32 md:flex-row md:items-center">
+      <section className="bg-bone-50 px-24 py-96 md:px-48 md:py-128">
+        <div className="mx-auto flex max-w-container flex-col items-start justify-between gap-32 rounded-lg border border-rule-firm bg-bone-100 p-32 md:flex-row md:items-center md:p-48">
           <div>
             <h2 className="font-display text-display-md font-bold tracking-tight text-navy-900">
               Ready to start?
@@ -172,7 +174,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           </Button>
         </div>
       </section>
-    </main>
+    </div>
   )
 }
 

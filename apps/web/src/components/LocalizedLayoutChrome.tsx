@@ -84,6 +84,7 @@ export function LocalizedLayoutChrome({
           { label: 'Terms', href: '/terms' },
         ]}
         Link={LocalizedLink}
+        variant="dark"
       />
     </>
   )

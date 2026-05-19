@@ -52,7 +52,7 @@ export function FooterBlock({
   return (
     <footer
       className={cn(
-        'mt-32 border-t',
+        'border-t',
         dark
           ? 'border-bone-100/10 bg-navy-900 text-bone-100'
           : 'border-ink-900/[0.08] bg-bone-100 text-ink-900',
@@ -60,7 +60,7 @@ export function FooterBlock({
       )}
       {...rest}
     >
-      <div className="mx-auto grid max-w-container grid-cols-1 gap-12 px-6 py-24 md:grid-cols-4 md:px-10">
+      <div className="mx-auto grid max-w-container grid-cols-1 gap-32 px-24 py-64 md:grid-cols-4 md:gap-48 md:px-48 md:py-96">
         <div>
           <span
             className={cn(
@@ -114,7 +114,7 @@ export function FooterBlock({
       {legalLinks.length > 0 ? (
         <div
           className={cn(
-            'mx-auto flex max-w-container flex-col gap-4 px-6 py-6 text-body-sm md:flex-row md:items-center md:justify-between md:px-10',
+            'mx-auto flex max-w-container flex-col gap-16 px-24 py-24 text-body-sm md:flex-row md:items-center md:justify-between md:px-48',
             dark ? 'border-t border-bone-100/10' : 'border-t border-ink-900/[0.08]',
           )}
         >
