@@ -13,9 +13,10 @@ export interface Config {
   collections: {
     media: Media;
     authors: Author;
+    categories: Category;
+    insights: Insight;
     regulations: Regulation;
     services: Service;
-    categories: Category;
     users: User;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -25,9 +26,10 @@ export interface Config {
   collectionsSelect: {
     media: MediaSelect<false> | MediaSelect<true>;
     authors: AuthorsSelect<false> | AuthorsSelect<true>;
+    categories: CategoriesSelect<false> | CategoriesSelect<true>;
+    insights: InsightsSelect<false> | InsightsSelect<true>;
     regulations: RegulationsSelect<false> | RegulationsSelect<true>;
     services: ServicesSelect<false> | ServicesSelect<true>;
-    categories: CategoriesSelect<false> | CategoriesSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -136,6 +138,56 @@ export interface Author {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories".
+ */
+export interface Category {
+  id: number;
+  slug: string;
+  name: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "insights".
+ */
+export interface Insight {
+  id: number;
+  slug: string;
+  title: string;
+  lead: string;
+  body: {
+    root: {
+      type: string;
+      children: {
+        type: string;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  category: number | Category;
+  author: number | Author;
+  coverImage?: (number | null) | Media;
+  regulationsCited?: (number | Regulation)[] | null;
+  publishedAt: string;
+  estReadTime?: number | null;
+  status: 'draft' | 'published';
+  seo?: {
+    metaTitle?: string | null;
+    metaDescription?: string | null;
+  };
+  updatedAt: string;
+  createdAt: string;
+  _status?: ('draft' | 'published') | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "regulations".
  */
 export interface Regulation {
@@ -234,17 +286,6 @@ export interface Service {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories".
- */
-export interface Category {
-  id: number;
-  slug: string;
-  name: string;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users".
  */
 export interface User {
@@ -278,16 +319,20 @@ export interface PayloadLockedDocument {
         value: number | Author;
       } | null)
     | ({
+        relationTo: 'categories';
+        value: number | Category;
+      } | null)
+    | ({
+        relationTo: 'insights';
+        value: number | Insight;
+      } | null)
+    | ({
         relationTo: 'regulations';
         value: number | Regulation;
       } | null)
     | ({
         relationTo: 'services';
         value: number | Service;
-      } | null)
-    | ({
-        relationTo: 'categories';
-        value: number | Category;
       } | null)
     | ({
         relationTo: 'users';
@@ -404,6 +449,42 @@ export interface AuthorsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "categories_select".
+ */
+export interface CategoriesSelect<T extends boolean = true> {
+  slug?: T;
+  name?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "insights_select".
+ */
+export interface InsightsSelect<T extends boolean = true> {
+  slug?: T;
+  title?: T;
+  lead?: T;
+  body?: T;
+  category?: T;
+  author?: T;
+  coverImage?: T;
+  regulationsCited?: T;
+  publishedAt?: T;
+  estReadTime?: T;
+  status?: T;
+  seo?:
+    | T
+    | {
+        metaTitle?: T;
+        metaDescription?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+  _status?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "regulations_select".
  */
 export interface RegulationsSelect<T extends boolean = true> {
@@ -469,16 +550,6 @@ export interface ServicesSelect<T extends boolean = true> {
       };
   regulationsCited?: T;
   outsideScope?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "categories_select".
- */
-export interface CategoriesSelect<T extends boolean = true> {
-  slug?: T;
-  name?: T;
   updatedAt?: T;
   createdAt?: T;
 }
