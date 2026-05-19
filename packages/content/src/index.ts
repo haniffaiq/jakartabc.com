@@ -1,3 +1,4 @@
+export { Authors } from './collections/Authors'
 export { Media } from './collections/Media'
 export { Categories } from './collections/Categories'
 export { SiteSettings } from './globals/SiteSettings'
