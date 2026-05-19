@@ -65,6 +65,18 @@ describe('verifyTurnstile', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('accepts the explicit e2e token only when the Cloudflare test secret is configured', async () => {
+    process.env.TURNSTILE_SECRET_KEY = '1x0000000000000000000000000000000AA'
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { verifyTurnstile } = await import('./turnstile')
+
+    await expect(verifyTurnstile('e2e-turnstile-token', '127.0.0.1')).resolves.toBe(true)
+    await expect(verifyTurnstile('wrong-token', '127.0.0.1')).resolves.toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('returns false on network error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('net')))
 

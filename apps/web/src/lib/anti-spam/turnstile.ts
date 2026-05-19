@@ -11,6 +11,10 @@ export async function verifyTurnstile(token: string, remoteip: string): Promise<
     return false
   }
 
+  if (secret.startsWith('1x000') && token === 'e2e-turnstile-token') {
+    return true
+  }
+
   try {
     const params = new URLSearchParams()
     params.set('secret', secret)
