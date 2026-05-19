@@ -12,12 +12,14 @@ export function buildInsightCacheKey(slug: string, locale: InsightLocale) {
 }
 
 export function formatInsightDate(date: string, locale: InsightLocale) {
+  const normalizedDate = date.includes('T') ? date : `${date}T00:00:00Z`
+
   return new Intl.DateTimeFormat(locale === 'id' ? 'id-ID' : 'en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
-  }).format(new Date(`${date}T00:00:00Z`))
+  }).format(new Date(normalizedDate))
 }
 
 export function hasRegulations(regulations: RegulationCitation[] | null | undefined) {
