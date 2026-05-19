@@ -17,11 +17,11 @@
   "footer": {
     "address": ["Sudirman Central Business District", "Jakarta 12190, Indonesia"],
     "email": "hello@jakartabc.com",
-    "licenses": ["Konsultan Berlisensi BKPM", "PT PMA Terdaftar: 001/2025"]
+    "licenses": ["Konsultan Berlisensi BKPM", "Entitas Asing Terdaftar: 001/2025"]
   },
   "home": {
     "eyebrow": "INVESTASI ASING LANGSUNG · INDONESIA",
-    "headline": "Dirikan PT PMA di Indonesia. Tanpa menebak-nebak.",
+    "headline": "Dirikan entitas usaha Anda di Indonesia. Tanpa menebak-nebak.",
     "lead": "Pendirian perusahaan kepemilikan asing, izin sektoral, dan kepatuhan berkelanjutan — ditangani tim Jakarta yang sudah melakukannya 400+ kali.",
     "primaryCta": "Jadwalkan panggilan 30 menit",
     "secondaryCta": "Lihat prosesnya",
@@ -30,7 +30,7 @@
     "services": [
       {
         "slug": "pt-pma-setup",
-        "title": "Pendirian PT PMA",
+        "title": "Pendirian Perusahaan Asing",
         "desc": "Pendirian perusahaan kepemilikan asing, end-to-end.",
         "timeline": "4–6 minggu"
       },
@@ -65,7 +65,7 @@
     "list": [
       {
         "slug": "pt-pma-setup",
-        "title": "Pendirian PT PMA",
+        "title": "Pendirian Perusahaan Asing",
         "desc": "Pendirian perusahaan kepemilikan asing, end-to-end.",
         "timeline": "4–6 minggu"
       },
@@ -120,7 +120,7 @@
     "ctaQuote": "Minta kuotasi khusus",
     "rows": [
       {
-        "service": "Pendirian PT PMA",
+        "service": "Pendirian Perusahaan Asing",
         "govFee": 2500000,
         "ourFee": 12000000
       },

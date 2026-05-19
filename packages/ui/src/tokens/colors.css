@@ -1,33 +1,40 @@
 :root {
-  /* Core */
-  --ink-900: #1a1815;
-  --ink-700: #3a352e;
-  --ink-500: #6b6358;
+  /* Core text — slate (corporate neutral) */
+  --ink-900: #0f172a;
+  --ink-700: #334155;
+  --ink-500: #64748b;
 
   /* Surfaces */
-  --bone-50: #faf7f2;
-  --bone-100: #f2ede4;
-  --bone-200: #e5ddd0;
+  --bone-50: #ffffff;
+  --bone-100: #f8fafc;
+  --bone-200: #e2e8f0;
 
-  /* Accent */
-  --ochre-600: #8a661b;
-  --ochre-700: #775716;
-  --ochre-100: #f0e3c9;
+  /* Primary — navy (Corporate trust) */
+  --navy-900: #0b1e3f;
+  --navy-800: #102a56;
+  --navy-700: #173a73;
+  --navy-600: #1d4ed8;
+  --navy-100: #dbeafe;
+
+  /* Accent (legacy ochre, muted gold) */
+  --ochre-600: #b08524;
+  --ochre-700: #8a661b;
+  --ochre-100: #f7e9c8;
 
   /* Functional */
-  --success: #4a6b3f;
-  --warning: #b8732a;
-  --danger: #8b3a2e;
-  --info: #3a5567;
+  --success: #15803d;
+  --warning: #c2410c;
+  --danger: #b91c1c;
+  --info: #1d4ed8;
 
   /* Border */
-  --rule-soft: rgba(26, 24, 21, 0.08);
-  --rule-firm: rgba(26, 24, 21, 0.16);
+  --rule-soft: rgba(15, 23, 42, 0.08);
+  --rule-firm: rgba(15, 23, 42, 0.16);
 
-  /* Dark variant (selective per design-system.md §24) */
-  --dark-bg: #1a1815;
-  --dark-surface: #252220;
-  --dark-text: #f2ede4;
-  --dark-text-2: #b0a89b;
-  --dark-accent: #d4a24c;
+  /* Dark variant */
+  --dark-bg: #0b1e3f;
+  --dark-surface: #102a56;
+  --dark-text: #e2e8f0;
+  --dark-text-2: #94a3b8;
+  --dark-accent: #60a5fa;
 }

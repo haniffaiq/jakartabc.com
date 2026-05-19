@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { NextIntlClientProvider } from 'next-intl'
-import { Fraunces, Inter } from 'next/font/google'
+import { Plus_Jakarta_Sans, Inter } from 'next/font/google'
 import { getMessages, getTranslations, unstable_setRequestLocale } from 'next-intl/server'
 
 import { LocalizedLayoutChrome } from '@/components/LocalizedLayoutChrome'
@@ -13,18 +13,18 @@ export const metadata = {
   description: 'Foreign company registration and market entry consulting in Indonesia.',
 }
 
-const fraunces = Fraunces({
+const display = Plus_Jakarta_Sans({
   subsets: ['latin'],
   variable: '--font-display',
   display: 'swap',
-  weight: ['400', '500'],
+  weight: ['500', '600', '700', '800'],
 })
 
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-body',
   display: 'swap',
-  weight: ['400', '500'],
+  weight: ['400', '500', '600'],
 })
 
 export function generateStaticParams() {
@@ -47,7 +47,7 @@ export default async function LocaleLayout({
   const footer = await getTranslations('footer')
 
   return (
-    <html lang={locale} className={`${fraunces.variable} ${inter.variable}`}>
+    <html lang={locale} className={`${display.variable} ${inter.variable}`}>
       <body>
         <NextIntlClientProvider locale={locale} messages={messages}>
           <LocalizedLayoutChrome

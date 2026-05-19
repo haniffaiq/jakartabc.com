@@ -23,19 +23,20 @@ type ButtonAsLink = CommonProps &
 export type ButtonProps = ButtonAsButton | ButtonAsLink
 
 const base =
-  'inline-flex items-center justify-center gap-8 rounded-sm font-body text-body-md ' +
-  'transition-colors duration-fast ease-out ' +
+  'inline-flex items-center justify-center gap-8 rounded-md font-body text-body-md font-semibold ' +
+  'transition-all duration-fast ease-out shadow-sm ' +
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ' +
-  'focus-visible:outline-ochre-600 ' +
+  'focus-visible:outline-navy-600 ' +
   'active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60'
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    'bg-ochre-600 text-bone-50 px-24 py-12 hover:bg-ochre-700 active:bg-ochre-700 ' +
-    'disabled:bg-bone-200 disabled:text-ink-500',
-  secondary: 'border border-ink-900 text-ink-900 bg-transparent px-24 py-12 ' + 'hover:bg-bone-100',
-  ghost: 'text-ink-900 px-8 py-4 underline-offset-4 hover:underline hover:text-ochre-700',
-  link: 'text-ochre-700 underline underline-offset-4 hover:text-ochre-600 p-0',
+    'bg-navy-700 text-bone-50 px-24 py-12 hover:bg-navy-800 active:bg-navy-900 hover:shadow-md ' +
+    'disabled:bg-bone-200 disabled:text-ink-500 disabled:shadow-none',
+  secondary:
+    'border border-navy-700 text-navy-700 bg-transparent px-24 py-12 hover:bg-navy-100 shadow-none',
+  ghost: 'text-navy-700 px-8 py-4 shadow-none underline-offset-4 hover:underline hover:text-navy-600',
+  link: 'text-navy-600 underline underline-offset-4 hover:text-navy-700 p-0 shadow-none',
 }
 
 function Spinner() {

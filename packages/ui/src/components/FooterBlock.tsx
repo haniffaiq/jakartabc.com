@@ -34,7 +34,7 @@ function DefaultLink({ href, className, children }: FooterBlockLinkProps) {
 
 const focusLink =
   'underline-offset-4 transition-colors duration-fast ease-out hover:underline ' +
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600'
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600'
 
 export function FooterBlock({
   brand,
@@ -54,15 +54,20 @@ export function FooterBlock({
       className={cn(
         'mt-32 border-t',
         dark
-          ? 'border-bone-100/10 bg-ink-900 text-bone-100'
-          : 'border-ink-900/[0.08] bg-bone-50 text-ink-900',
+          ? 'border-bone-100/10 bg-navy-900 text-bone-100'
+          : 'border-ink-900/[0.08] bg-bone-100 text-ink-900',
         className,
       )}
       {...rest}
     >
       <div className="mx-auto grid max-w-container grid-cols-1 gap-12 px-6 py-24 md:grid-cols-4 md:px-10">
         <div>
-          <span className={cn('font-display text-2xl', dark ? 'text-bone-100' : 'text-ink-900')}>
+          <span
+            className={cn(
+              'font-display text-xl font-extrabold uppercase tracking-[0.08em]',
+              dark ? 'text-bone-50' : 'text-navy-900',
+            )}
+          >
             {brand}
           </span>
         </div>
@@ -87,7 +92,7 @@ export function FooterBlock({
             className={cn(
               'text-body-md',
               focusLink,
-              dark ? 'hover:text-ochre-100' : 'hover:text-ochre-700',
+              dark ? 'hover:text-navy-100' : 'hover:text-navy-700',
             )}
           >
             {email}
@@ -121,7 +126,7 @@ export function FooterBlock({
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  className={cn(focusLink, dark ? 'hover:text-ochre-100' : 'hover:text-ochre-700')}
+                  className={cn(focusLink, dark ? 'hover:text-navy-100' : 'hover:text-navy-700')}
                 >
                   {link.label}
                 </Link>

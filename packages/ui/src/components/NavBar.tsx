@@ -50,15 +50,15 @@ export function NavBar({
     <nav
       aria-label="Primary"
       className={cn(
-        'sticky top-0 z-50 h-[64px] bg-bone-50 transition-colors duration-fast md:h-[72px]',
-        scrolled ? 'border-b border-ink-900/[0.08]' : 'border-b border-transparent',
+        'sticky top-0 z-50 h-[64px] bg-bone-50/95 backdrop-blur-md transition-all duration-fast md:h-[72px]',
+        scrolled ? 'border-b border-rule-soft shadow-sm' : 'border-b border-transparent',
         className,
       )}
     >
       <div className="mx-auto flex h-full max-w-container items-center justify-between px-6 md:px-10">
         <Link
           href="/"
-          className="font-display text-2xl text-ink-900 underline-offset-4 hover:text-ochre-700 hover:underline active:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
+          className="font-display text-xl font-extrabold uppercase tracking-[0.08em] text-navy-900 hover:text-navy-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600"
         >
           {brand}
         </Link>
@@ -68,7 +68,7 @@ export function NavBar({
             <li key={item.href}>
               <Link
                 href={item.href}
-                className="text-body-md text-ink-900 underline-offset-4 hover:text-ochre-700 hover:underline active:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
+                className="text-body-md text-ink-900 underline-offset-4 hover:text-navy-700 hover:underline active:text-navy-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600"
               >
                 {item.label}
               </Link>
@@ -81,13 +81,13 @@ export function NavBar({
             type="button"
             onClick={() => onLocaleChange(next)}
             aria-label={`Switch to ${next === 'id' ? 'Indonesian' : 'English'}`}
-            className="text-eyebrow uppercase tracking-[0.08em] text-ink-700 hover:text-ink-900 active:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
+            className="text-eyebrow font-semibold uppercase tracking-[0.16em] text-ink-500 hover:text-navy-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600"
           >
             EN · ID
           </button>
           <Link
             href={cta.href}
-            className="inline-flex items-center justify-center rounded-sm bg-ochre-600 px-24 py-12 font-body text-body-md text-bone-50 transition-colors duration-fast hover:bg-ochre-700 active:bg-ochre-700 active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
+            className="inline-flex items-center justify-center rounded-md bg-navy-700 px-24 py-12 font-body text-body-md font-semibold text-bone-50 shadow-sm transition-all duration-fast hover:bg-navy-800 hover:shadow-md active:bg-navy-900 active:translate-y-px focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600"
           >
             {cta.label}
           </Link>
@@ -97,7 +97,7 @@ export function NavBar({
           type="button"
           aria-label="Open menu"
           onClick={onMobileOpen}
-          className="text-ink-900 hover:text-ochre-700 active:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600 md:hidden"
+          className="text-navy-900 hover:text-navy-700 active:text-navy-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600 md:hidden"
         >
           <svg
             width="24"

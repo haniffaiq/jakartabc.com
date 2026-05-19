@@ -17,12 +17,12 @@
   "footer": {
     "address": ["Sudirman Central Business District", "Jakarta 12190, Indonesia"],
     "email": "hello@jakartabc.com",
-    "licenses": ["BKPM Licensed Consultant", "PT PMA Registered: 001/2025"]
+    "licenses": ["BKPM Licensed Consultant", "Foreign Entity Reg: 001/2025"]
   },
   "home": {
     "eyebrow": "FOREIGN DIRECT INVESTMENT · INDONESIA",
-    "headline": "Set up a PT PMA in Indonesia. Without the guesswork.",
-    "lead": "Foreign-owned company registration, sector licensing, and ongoing compliance — handled by a Jakarta team that has done it 400+ times.",
+    "headline": "Set up your Indonesia entity. Without the guesswork.",
+    "lead": "Foreign-owned company registration, sector licensing, and ongoing compliance — delivered by a licensed Jakarta team. 400+ successful setups since 2011.",
     "primaryCta": "Book a 30-min call",
     "secondaryCta": "See how it works",
     "servicesEyebrow": "WHAT WE DO",
@@ -30,7 +30,7 @@
     "services": [
       {
         "slug": "pt-pma-setup",
-        "title": "PT PMA Setup",
+        "title": "Foreign Company Setup",
         "desc": "Foreign-owned LLC registration, end to end.",
         "timeline": "4–6 wks"
       },
@@ -144,7 +144,7 @@
     "ctaQuote": "Get a tailored quote",
     "rows": [
       {
-        "service": "PT PMA setup",
+        "service": "Foreign company setup",
         "govFee": 2500000,
         "ourFee": 12000000
       },
@@ -189,7 +189,7 @@
     "list": [
       {
         "slug": "pt-pma-setup",
-        "title": "PT PMA Setup",
+        "title": "Foreign Company Setup",
         "desc": "Foreign-owned LLC registration, end to end.",
         "timeline": "4–6 wks"
       },

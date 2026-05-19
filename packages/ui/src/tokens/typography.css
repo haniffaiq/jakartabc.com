@@ -1,5 +1,5 @@
 :root {
-  --font-display: "Fraunces", "GT Sectra", "Tiempos Headline", Georgia, serif;
+  --font-display: "Plus Jakarta Sans", "Inter", "Söhne", system-ui, sans-serif;
   --font-body: "Inter", "Söhne", "Neue Haas Grotesk", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
 

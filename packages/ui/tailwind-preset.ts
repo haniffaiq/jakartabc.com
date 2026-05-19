@@ -20,6 +20,13 @@ const preset = {
           700: 'var(--ochre-700)',
           100: 'var(--ochre-100)',
         },
+        navy: {
+          900: 'var(--navy-900)',
+          800: 'var(--navy-800)',
+          700: 'var(--navy-700)',
+          600: 'var(--navy-600)',
+          100: 'var(--navy-100)',
+        },
         success: 'var(--success)',
         warning: 'var(--warning)',
         danger: 'var(--danger)',
