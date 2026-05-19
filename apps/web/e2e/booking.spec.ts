@@ -226,3 +226,22 @@ test('booking honeypot non-empty silently succeeds without creating a lead', asy
   await expect(page.getByText(/within 1 business day/i)).toBeVisible({ timeout: 15_000 })
   await expect.poll(() => bookingLeadCount(email)).toBe(beforeCount)
 })
+
+test('booking rate limit hits at 6th attempt', async ({ page }) => {
+  const email = `rate+${Date.now()}@example.test`
+
+  await installTurnstileStub(page)
+
+  for (let i = 0; i < 5; i++) {
+    await page.goto('/services/pt-pma-setup')
+    await fillBookingForm(page, 'en', email)
+    await page.getByRole('button', { name: /send/i }).click()
+    await expect(page.getByText(/within 1 business day/i)).toBeVisible({ timeout: 15_000 })
+  }
+
+  await page.goto('/services/pt-pma-setup')
+  await fillBookingForm(page, 'en', email)
+  await page.getByRole('button', { name: /send/i }).click()
+
+  await expect(page.getByText(/Couldn’t send|Tidak terkirim/i)).toBeVisible({ timeout: 15_000 })
+})
