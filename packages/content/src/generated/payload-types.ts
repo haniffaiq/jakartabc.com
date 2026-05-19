@@ -17,6 +17,8 @@ export interface Config {
     insights: Insight;
     regulations: Regulation;
     services: Service;
+    'contact-messages': ContactMessage;
+    'booking-leads': BookingLead;
     users: User;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -30,6 +32,8 @@ export interface Config {
     insights: InsightsSelect<false> | InsightsSelect<true>;
     regulations: RegulationsSelect<false> | RegulationsSelect<true>;
     services: ServicesSelect<false> | ServicesSelect<true>;
+    'contact-messages': ContactMessagesSelect<false> | ContactMessagesSelect<true>;
+    'booking-leads': BookingLeadsSelect<false> | BookingLeadsSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -286,6 +290,43 @@ export interface Service {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "contact-messages".
+ */
+export interface ContactMessage {
+  id: number;
+  name: string;
+  email: string;
+  company?: string | null;
+  message: string;
+  locale: 'en' | 'id';
+  status: 'new' | 'contacted' | 'converted' | 'dropped';
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "booking-leads".
+ */
+export interface BookingLead {
+  id: number;
+  name: string;
+  email: string;
+  company?: string | null;
+  phone?: string | null;
+  service: number | Service;
+  preferredWindows?:
+    | ('mon-am' | 'mon-pm' | 'tue-am' | 'tue-pm' | 'wed-am' | 'wed-pm' | 'thu-am' | 'thu-pm' | 'fri-am' | 'fri-pm')[]
+    | null;
+  message: string;
+  locale: 'en' | 'id';
+  status: 'new' | 'contacted' | 'converted' | 'dropped';
+  notes?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users".
  */
 export interface User {
@@ -333,6 +374,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'services';
         value: number | Service;
+      } | null)
+    | ({
+        relationTo: 'contact-messages';
+        value: number | ContactMessage;
+      } | null)
+    | ({
+        relationTo: 'booking-leads';
+        value: number | BookingLead;
       } | null)
     | ({
         relationTo: 'users';
@@ -550,6 +599,39 @@ export interface ServicesSelect<T extends boolean = true> {
       };
   regulationsCited?: T;
   outsideScope?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "contact-messages_select".
+ */
+export interface ContactMessagesSelect<T extends boolean = true> {
+  name?: T;
+  email?: T;
+  company?: T;
+  message?: T;
+  locale?: T;
+  status?: T;
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "booking-leads_select".
+ */
+export interface BookingLeadsSelect<T extends boolean = true> {
+  name?: T;
+  email?: T;
+  company?: T;
+  phone?: T;
+  service?: T;
+  preferredWindows?: T;
+  message?: T;
+  locale?: T;
+  status?: T;
+  notes?: T;
   updatedAt?: T;
   createdAt?: T;
 }
