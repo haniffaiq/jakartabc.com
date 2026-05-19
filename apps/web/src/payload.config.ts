@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { buildConfig } from 'payload'
-import { Footer, NavMenu, SiteSettings } from '@jakartabc/content'
+import { Footer, NavMenu, Regulations, Services, SiteSettings } from '@jakartabc/content'
 import { env } from './env'
 
 const filename = fileURLToPath(import.meta.url)
@@ -19,6 +19,8 @@ export default buildConfig({
   },
   editor: lexicalEditor({}),
   collections: [
+    Regulations,
+    Services,
     {
       slug: 'users',
       auth: {

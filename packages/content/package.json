@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./globals/*": "./src/globals/*.ts",
+    "./collections/*": "./src/collections/*.ts",
     "./hooks/*": "./src/hooks/*.ts",
     "./generated/payload-types": "./src/generated/payload-types.ts"
   },

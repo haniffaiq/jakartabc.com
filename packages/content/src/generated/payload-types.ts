@@ -11,6 +11,8 @@ export interface Config {
     users: UserAuthOperations;
   };
   collections: {
+    regulations: Regulation;
+    services: Service;
     users: User;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -18,6 +20,8 @@ export interface Config {
   };
   collectionsJoins: {};
   collectionsSelect: {
+    regulations: RegulationsSelect<false> | RegulationsSelect<true>;
+    services: ServicesSelect<false> | ServicesSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -65,6 +69,104 @@ export interface UserAuthOperations {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "regulations".
+ */
+export interface Regulation {
+  id: number;
+  code: string;
+  title: string;
+  url: string;
+  effectiveDate?: string | null;
+  notes?: {
+    root: {
+      type: string;
+      children: {
+        type: string;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "services".
+ */
+export interface Service {
+  id: number;
+  slug: string;
+  order: number;
+  name: string;
+  timelineLabel: string;
+  leadParagraph: string;
+  overview: {
+    root: {
+      type: string;
+      children: {
+        type: string;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  whoFor?:
+    | {
+        persona: string;
+        desc?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  requirements?:
+    | {
+        label: string;
+        id?: string | null;
+      }[]
+    | null;
+  timelineSteps?:
+    | {
+        week: string;
+        label: string;
+        who: 'we' | 'joint' | 'you';
+        docs?:
+          | {
+              doc?: string | null;
+              id?: string | null;
+            }[]
+          | null;
+        id?: string | null;
+      }[]
+    | null;
+  pricing: {
+    govFee: number;
+    ourFee: number;
+    currency: string;
+  };
+  faq?:
+    | {
+        q: string;
+        a: string;
+        id?: string | null;
+      }[]
+    | null;
+  regulationsCited?: (number | Regulation)[] | null;
+  outsideScope?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users".
  */
 export interface User {
@@ -88,10 +190,19 @@ export interface User {
  */
 export interface PayloadLockedDocument {
   id: number;
-  document?: {
-    relationTo: 'users';
-    value: number | User;
-  } | null;
+  document?:
+    | ({
+        relationTo: 'regulations';
+        value: number | Regulation;
+      } | null)
+    | ({
+        relationTo: 'services';
+        value: number | Service;
+      } | null)
+    | ({
+        relationTo: 'users';
+        value: number | User;
+      } | null);
   globalSlug?: string | null;
   user: {
     relationTo: 'users';
@@ -133,6 +244,76 @@ export interface PayloadMigration {
   batch?: number | null;
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "regulations_select".
+ */
+export interface RegulationsSelect<T extends boolean = true> {
+  code?: T;
+  title?: T;
+  url?: T;
+  effectiveDate?: T;
+  notes?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "services_select".
+ */
+export interface ServicesSelect<T extends boolean = true> {
+  slug?: T;
+  order?: T;
+  name?: T;
+  timelineLabel?: T;
+  leadParagraph?: T;
+  overview?: T;
+  whoFor?:
+    | T
+    | {
+        persona?: T;
+        desc?: T;
+        id?: T;
+      };
+  requirements?:
+    | T
+    | {
+        label?: T;
+        id?: T;
+      };
+  timelineSteps?:
+    | T
+    | {
+        week?: T;
+        label?: T;
+        who?: T;
+        docs?:
+          | T
+          | {
+              doc?: T;
+              id?: T;
+            };
+        id?: T;
+      };
+  pricing?:
+    | T
+    | {
+        govFee?: T;
+        ourFee?: T;
+        currency?: T;
+      };
+  faq?:
+    | T
+    | {
+        q?: T;
+        a?: T;
+        id?: T;
+      };
+  regulationsCited?: T;
+  outsideScope?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
