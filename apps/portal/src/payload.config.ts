@@ -9,7 +9,7 @@ const dirname = path.dirname(filename)
 
 export default buildConfig({
   serverURL: process.env.NEXT_PUBLIC_PORTAL_URL,
-  admin: { disabled: true },
+  admin: { disable: true },
   collections: [
     {
       slug: 'users',
