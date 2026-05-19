@@ -68,6 +68,16 @@ async function trustedClientIp() {
 }
 
 export async function submitBooking(formData: FormData): Promise<SubmitBookingResult> {
+  const honeypot = formData.get('hp')
+  if (typeof honeypot === 'string' && honeypot.length > 0) {
+    const email = formData.get('email')
+    console.info(
+      '[booking] honeypot triggered for',
+      typeof email === 'string' ? redactEmail(email) : '[redacted]',
+    )
+    return { ok: true }
+  }
+
   const parsed = bookingSchema.safeParse(formDataToBookingObject(formData))
 
   if (!parsed.success) {
@@ -76,11 +86,6 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   }
 
   const data = parsed.data
-
-  if (data.hp.length > 0) {
-    console.info('[booking] honeypot triggered for', redactEmail(data.email))
-    return { ok: true }
-  }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'
   const salesEmail = process.env.SALES_EMAIL
