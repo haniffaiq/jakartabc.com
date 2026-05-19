@@ -18,7 +18,7 @@ export default defineConfig({
   webServer: process.env.PLAYWRIGHT_NO_SERVER
     ? undefined
     : {
-        command: `pnpm exec next start -p ${PORT}`,
+        command: `mkdir -p .next/standalone/apps/web/.next && cp -R .next/static .next/standalone/apps/web/.next/static && cp -R public .next/standalone/apps/web/public && PORT=${PORT} node .next/standalone/apps/web/server.js`,
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

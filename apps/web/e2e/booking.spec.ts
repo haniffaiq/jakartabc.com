@@ -20,7 +20,7 @@ let smtpServer: net.Server | null = null
 const smtpMessages: SmtpMessage[] = []
 
 async function ensureBookingFixtures() {
-  process.env.DATABASE_URL ??= 'postgres://jakartabc:jakartabc@localhost:5432/jakartabc'
+  process.env.DATABASE_URL ??= 'postgres://jakartabc:***@localhost:5432/jakartabc'
   process.env.PAYLOAD_SECRET ??= 'ci-secret-32-chars-minimum-padding-xx'
   process.env.NEXT_PUBLIC_SITE_URL ??= SITE_URL
   process.env.REVALIDATE_SECRET ??= 'ci-revalidate-secret'
@@ -147,6 +147,19 @@ async function fillBookingForm(page: Page, locale: 'en' | 'id', email: string) {
     .fill('I want to set up a PT PMA. Please contact me with the next practical steps.')
 }
 
+
+async function bookingLeadCount(email: string) {
+  if (!payload) throw new Error('Payload fixture is not initialized')
+
+  const result = await payload.find({
+    collection: 'booking-leads',
+    where: { email: { equals: email } },
+    limit: 0,
+  })
+
+  return result.totalDocs
+}
+
 test.beforeAll(async () => {
   await startSmtpSink()
   await ensureBookingFixtures()
@@ -195,3 +208,21 @@ for (const locale of ['en', 'id'] as const) {
     expect(smtpMessages.slice(startedAt).some((message) => message.data.includes(email))).toBe(true)
   })
 }
+
+test('booking honeypot non-empty silently succeeds without creating a lead', async ({ page }) => {
+  const email = `bot+${Date.now()}@example.test`
+  const beforeCount = await bookingLeadCount(email)
+
+  await page.goto('/services/pt-pma-setup')
+  await page.locator('input[name="hp"]').evaluate((input) => {
+    ;(input as HTMLInputElement).value = 'spambot'
+  })
+  await page.locator('input[name="name"]').fill('Bot')
+  await page.locator('input[name="email"]').fill(email)
+  await page.locator('select[name="service"]').selectOption('pt-pma-setup')
+  await page.locator('textarea[name="message"]').fill('Spammy spammy message text content.')
+  await page.getByRole('button', { name: /send/i }).click()
+
+  await expect(page.getByText(/within 1 business day/i)).toBeVisible({ timeout: 15_000 })
+  await expect.poll(() => bookingLeadCount(email)).toBe(beforeCount)
+})
