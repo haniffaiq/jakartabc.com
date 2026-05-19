@@ -11,6 +11,7 @@ import {
   StickyTOC,
 } from '@jakartabc/ui'
 
+import { BookingFormWired } from '@/components/BookingFormWired'
 import { getPathname, routing, type Locale } from '@/i18n/routing'
 import { getPayloadClient } from '@/lib/payload'
 import { RichTextRender } from '@/lib/richTextRender'
@@ -279,6 +280,33 @@ export default async function ServiceDetailPage({
           whatsapp: '+62-21-555-1234',
         }}
       />
+
+      <section className="mx-auto mt-96 max-w-reading border border-rule-soft bg-bone-100 p-32 md:p-48">
+        <Eyebrow>{locale === 'en' ? 'Book this service' : 'Jadwalkan layanan ini'}</Eyebrow>
+        <div className="mt-32">
+          <BookingFormWired
+            labels={{
+              name: locale === 'en' ? 'Name' : 'Nama',
+              email: 'Email',
+              company: locale === 'en' ? 'Company' : 'Perusahaan',
+              phone: locale === 'en' ? 'Phone' : 'Telepon',
+              service: locale === 'en' ? 'Service' : 'Layanan',
+              preferredWindows: locale === 'en' ? 'Preferred times' : 'Waktu yang disukai',
+              message: locale === 'en' ? 'Message' : 'Pesan',
+              submit: locale === 'en' ? 'Send request' : 'Kirim permintaan',
+              sending: locale === 'en' ? 'Sending…' : 'Mengirim…',
+            }}
+            services={[{ slug: service.slug, name: service.name ?? slug }]}
+            defaultService={service.slug}
+            locale={locale}
+            successMessage={
+              locale === 'en'
+                ? "Thanks. We'll reply within 1 business day."
+                : 'Terima kasih. Kami balas dalam 1 hari kerja.'
+            }
+          />
+        </div>
+      </section>
     </article>
   )
 }
