@@ -1,0 +1,40 @@
+{
+  "name": "@jakartabc/portal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "lint": "eslint --config ../../packages/config/eslint/index.js .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@jakartabc/ui": "workspace:*",
+    "@payloadcms/db-postgres": "3.0.0",
+    "@payloadcms/next": "3.0.0",
+    "@payloadcms/richtext-lexical": "3.0.0",
+    "next": "15.0.3",
+    "payload": "3.0.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@jakartabc/config": "workspace:*",
+    "@playwright/test": "1.48.2",
+    "@testing-library/react": "16.0.1",
+    "@types/node": "20.16.11",
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.1",
+    "autoprefixer": "10.4.20",
+    "happy-dom": "15.11.7",
+    "postcss": "8.4.47",
+    "tailwindcss": "3.4.13",
+    "typescript": "5.6.3",
+    "vitest": "2.1.3"
+  }
+}
