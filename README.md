@@ -263,3 +263,37 @@ After rotation, ask admins to sign in again and verify `/admin` works.
 - Keep ports 80 and 443 open so Caddy can renew Let's Encrypt certificates.
 - Do not put production secrets in GitHub issues, PR comments, logs, or commits.
 - `staging.jakartabc.com` is the Phase 0 target. Production domain cutover is a later ops decision.
+
+## Portal deploy (Phase 4)
+
+The client portal runs as a separate container on subdomain `app.jakartabc.com`.
+
+**One-time DNS setup:**
+
+1. Add an `A` record for `app.jakartabc.com` pointing to the VPS IP (same as the main site). For staging, use the equivalent `app.staging.jakartabc.com` host if the staging DNS pattern is separate.
+2. Wait for DNS propagation and verify it from outside the VPS:
+
+   ```bash
+   dig app.jakartabc.com
+   ```
+
+**First-time portal deploy:**
+
+```bash
+ssh deploy@vps
+cd /opt/jakartabc.com
+git pull
+docker compose up -d --build portal
+```
+
+Caddy will auto-provision a TLS certificate for `app.jakartabc.com` on first request after DNS resolves.
+
+**Creating the first portal user:**
+
+The portal has no self-service signup. To create a user, log into the web admin at `https://jakartabc.com/admin` and add a new entry to the `users` collection. Set `role` to `client`. The user will receive password-reset instructions via Payload's auth UI, or share initial credentials securely out-of-band.
+
+**Verifying portal:**
+
+- Visit `https://app.jakartabc.com/login` — login page renders over TLS.
+- Sign in with a valid client user — lands on `/dashboard`.
+- Logout — returns to `/login`.
