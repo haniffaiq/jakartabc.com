@@ -1,8 +1,9 @@
 {
-  "extends": "@jakartabc/config/tsconfig/base.json",
+  "extends": "@jakartabc/config/tsconfig/react-library.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": ["node", "react"]
   },
   "include": ["src/**/*"]
 }
