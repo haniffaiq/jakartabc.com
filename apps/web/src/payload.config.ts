@@ -7,6 +7,7 @@ import {
   Authors,
   Categories,
   Footer,
+  Insights,
   Media,
   NavMenu,
   Regulations,
@@ -30,9 +31,10 @@ export default buildConfig({
   collections: [
     Media,
     Authors,
+    Categories,
+    Insights,
     Regulations,
     Services,
-    Categories,
     {
       slug: 'users',
       auth: {
