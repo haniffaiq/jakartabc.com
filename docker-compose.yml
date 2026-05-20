@@ -8,8 +8,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-jakartabc}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-jakartabc}
-    ports:
-      - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,13 +17,51 @@ services:
       retries: 10
     networks:
       - internal
+    profiles:
+      - bundled-db
+
+  # Init container: applies committed Payload migrations against $DATABASE_URL.
+  # Runs once per `docker compose up`; web container waits for it to exit 0.
+  # When DATABASE_URL points to an external Postgres (Supabase, RDS, etc.),
+  # this is the ONLY thing that touches schema. Use bundled local postgres via
+  # `COMPOSE_PROFILES=bundled-db docker compose up`.
+  web-migrate:
+    image: jakartabc-web-builder
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: builder
+      args:
+        DATABASE_URL: ${DATABASE_URL}
+        PAYLOAD_SECRET: ${PAYLOAD_SECRET}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
+        DEFAULT_LOCALE: ${DEFAULT_LOCALE:-en}
+        REVALIDATE_SECRET: ${REVALIDATE_SECRET}
+        EMAIL_PROVIDER: ${EMAIL_PROVIDER:-resend}
+        RESEND_API_KEY: ${RESEND_API_KEY}
+        EMAIL_FROM: ${EMAIL_FROM}
+        SALES_EMAIL: ${SALES_EMAIL}
+        TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    command: pnpm --filter @jakartabc/web exec payload migrate
+    working_dir: /repo
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    networks:
+      - internal
+    restart: 'no'
 
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        DATABASE_URL: ${BUILD_DATABASE_URL:-${DATABASE_URL}}
+        DATABASE_URL: ${DATABASE_URL}
         PAYLOAD_SECRET: ${PAYLOAD_SECRET}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
         DEFAULT_LOCALE: ${DEFAULT_LOCALE:-en}
@@ -39,8 +75,8 @@ services:
     env_file: .env
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
+      web-migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
     volumes:
@@ -57,15 +93,15 @@ services:
       context: .
       dockerfile: apps/portal/Dockerfile
       args:
-        DATABASE_URL: ${BUILD_DATABASE_URL:-${DATABASE_URL}}
+        DATABASE_URL: ${DATABASE_URL}
         PORTAL_PAYLOAD_SECRET: ${PORTAL_PAYLOAD_SECRET}
         PORTAL_COOKIE_DOMAIN: ${PORTAL_COOKIE_DOMAIN:-app.jakartabc.com}
         NEXT_PUBLIC_PORTAL_URL: ${NEXT_PUBLIC_PORTAL_URL}
     env_file: .env
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
+      web-migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: ${DATABASE_URL}
       PORTAL_PAYLOAD_SECRET: ${PORTAL_PAYLOAD_SECRET}

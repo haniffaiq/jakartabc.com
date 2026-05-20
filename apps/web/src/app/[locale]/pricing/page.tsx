@@ -5,6 +5,9 @@ import { unstable_cache as cache } from 'next/cache'
 import { getPathname, routing, type Locale } from '@/i18n/routing'
 import { getPayloadClient } from '@/lib/payload'
 
+// DB-backed page — render on demand so `next build` never connects to Postgres.
+export const dynamic = 'force-dynamic'
+
 type TableHeaders = {
   service: string
   govFee: string

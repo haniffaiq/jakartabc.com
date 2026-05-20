@@ -73,7 +73,10 @@ export default buildConfig({
     pool: {
       connectionString: env.DATABASE_URL,
     },
-    ...(process.env.PAYLOAD_FORCE_PUSH === 'true' ? { push: true } : {}),
+    // Migrations live in apps/web/src/migrations/ and are applied by the
+    // `web-migrate` init container (compose) on each `up`. Disable push
+    // entirely — we never want runtime schema mutation.
+    push: false,
   }),
   upload: {
     limits: { fileSize: 5_000_000 },

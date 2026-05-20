@@ -56,13 +56,11 @@ ENV DATABASE_URL=$DATABASE_URL \
     EMAIL_FROM=$EMAIL_FROM \
     SALES_EMAIL=$SALES_EMAIL \
     TURNSTILE_SECRET_KEY=$TURNSTILE_SECRET_KEY \
-    NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY \
-    PAYLOAD_FORCE_PUSH=true
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
-# NODE_ENV=development bypasses drizzle's prod-mode skip on pushDevSchema.
-# This is acceptable for a build-time, one-shot schema sync. Switch to
-# `payload migrate` once apps/web/src/migrations/* is generated and committed.
-RUN NODE_ENV=development pnpm --filter @jakartabc/web exec tsx scripts/db-push.ts
+# Build does not connect to DB — DATABASE_URL only needs to pass zod
+# format validation. Schema is applied at runtime by the `web-migrate`
+# init container (see docker-compose.yml) which runs `payload migrate`.
 RUN pnpm --filter @jakartabc/web build
 
 # ---- Stage 3: runtime ----
