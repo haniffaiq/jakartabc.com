@@ -114,29 +114,23 @@ services:
     ports:
       - '3101:3001'
 
-  caddy:
-    image: caddy:2-alpine
+  nginx:
+    image: nginx:1.27-alpine
     restart: unless-stopped
     depends_on:
       - web
     ports:
       - '8080:80'
-      - '8443:443'
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ./nginx/templates/http:/etc/nginx/templates:ro
     environment:
-      SITE_DOMAIN: ${SITE_DOMAIN:-staging.jakartabc.com}
-      ACME_EMAIL: ${ACME_EMAIL}
+      NGINX_ENVSUBST_FILTER: 'WEB_DOMAIN|PORTAL_DOMAIN'
     networks:
       - internal
 
 volumes:
   pgdata:
   uploads:
-  caddy_data:
-  caddy_config:
 
 networks:
   internal:
