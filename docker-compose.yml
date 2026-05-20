@@ -1,30 +1,14 @@
 name: jakartabc
 
-services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-jakartabc}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-jakartabc}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-jakartabc} -d ${POSTGRES_DB:-jakartabc}']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks:
-      - internal
-    profiles:
-      - bundled-db
+# App-only stack: web (FE) + portal (BE) + web-migrate (init container).
+# Postgres runs as a shared/external instance — set DATABASE_URL accordingly.
+# TLS termination is done by a native nginx on the server host, not here.
 
+services:
   # Init container: applies committed Payload migrations against $DATABASE_URL.
-  # Runs once per `docker compose up`; web container waits for it to exit 0.
-  # When DATABASE_URL points to an external Postgres (Supabase, RDS, etc.),
-  # this is the ONLY thing that touches schema. Use bundled local postgres via
-  # `COMPOSE_PROFILES=bundled-db docker compose up`.
+  # Runs once per `docker compose up`; web/portal wait for it to exit 0.
+  # DATABASE_URL points at the shared Postgres (host.docker.internal for a DB
+  # on the server host, or a managed-DB connection string).
   web-migrate:
     image: jakartabc-web-builder
     build:
@@ -48,10 +32,6 @@ services:
       NODE_ENV: production
     command: pnpm --filter @jakartabc/web exec payload migrate
     working_dir: /repo
-    depends_on:
-      postgres:
-        condition: service_healthy
-        required: false
     networks:
       - internal
     # Reach a Postgres running on the server host (DATABASE_URL points at
@@ -122,22 +102,7 @@ services:
     ports:
       - '3101:3001'
 
-  nginx:
-    image: nginx:1.27-alpine
-    restart: unless-stopped
-    depends_on:
-      - web
-    ports:
-      - '8080:80'
-    volumes:
-      - ./nginx/templates/http:/etc/nginx/templates:ro
-    environment:
-      NGINX_ENVSUBST_FILTER: 'WEB_DOMAIN|PORTAL_DOMAIN'
-    networks:
-      - internal
-
 volumes:
-  pgdata:
   uploads:
 
 networks:

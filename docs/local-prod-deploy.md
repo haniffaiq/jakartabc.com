@@ -1,33 +1,28 @@
 # Local prod-like deploy
 
-Compose stack di `docker-compose.yml` meniru production:
-**web + portal + nginx + web-migrate** (init container), dengan **postgres
-opsional** (profile `bundled-db`).
+Compose stack di `docker-compose.yml` adalah **app saja**:
+**web + portal + web-migrate** (init container). Postgres dipakai sebagai
+**instance shared/eksternal**, dan reverse proxy + TLS ditangani **nginx
+native di host** (di luar repo ini).
 
-## Run — bundled local postgres
+## Run
 
 ```sh
-COMPOSE_PROFILES=bundled-db docker compose up -d --build
+docker compose up -d --build
 ```
 
-## Run — external postgres (Supabase / RDS / Neon / dst.)
+Set `DATABASE_URL` di `.env` ke Postgres yang bisa dijangkau:
 
-1. Ubah `DATABASE_URL` di `.env` → connection string DB eksternal.
-   - DB di mesin host: pakai `host.docker.internal`, bukan `localhost`.
-   - Managed DB: tambah `?sslmode=require` (atau `no-verify` untuk RDS).
-2. ```sh
-   docker compose up -d --build
-   ```
-   (Tanpa profile. Service `postgres` tak di-start.)
+- DB di mesin host: pakai `host.docker.internal`, bukan `localhost`.
+- Managed DB: tambah `?sslmode=require` (atau `no-verify` untuk RDS).
 
 ## Endpoints (local)
 
 - web → http://localhost:3100
 - portal → http://localhost:3101
-- nginx (reverse proxy) → http://localhost:8080
 
-nginx lokal melayani HTTP saja, proxy ke `web`. Portal diakses langsung
-lewat port 3101.
+Reverse proxy / TLS bukan bagian dari stack ini — di server, nginx native
+host yang proxy ke kedua port tsb.
 
 ## How migrations work
 
@@ -55,53 +50,29 @@ throw saat `NEXT_PHASE=phase-production-build`, dan halaman DB-backed
 tak di-prerender saat build. `DATABASE_URL` di build args cuma perlu format
 URL valid (zod check).
 
-## Server deploy with TLS (nginx + certbot)
+## Server: reverse proxy + TLS (nginx native host)
 
-`docker-compose.tls.yml` adalah override khusus server: menambah service
-`certbot`, host port 80/443, dan menukar nginx ke config TLS.
+nginx + certbot di-setup langsung di server host, bukan di compose stack ini.
+Proxy ke container app:
 
-### Prasyarat
+- `web`   → `http://127.0.0.1:3100`
+- `portal` → `http://127.0.0.1:3101`
 
-- DNS `WEB_DOMAIN` dan `PORTAL_DOMAIN` sudah pointing ke IP server.
-- Port 80 dan 443 publik (HTTP-01 challenge butuh port 80).
-- `.env`: set `WEB_DOMAIN`, `PORTAL_DOMAIN`, `ACME_EMAIL`.
-
-### First issuance (sekali per server)
-
-```sh
-./scripts/init-letsencrypt.sh
-# dry-run dulu (LE staging CA, no rate limit):
-STAGING=1 ./scripts/init-letsencrypt.sh
-```
-
-Script: bikin dummy cert → start nginx → hapus dummy → request cert asli
-via certbot webroot → reload nginx.
-
-### Run / redeploy
-
-```sh
-docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d --build
-```
-
-### Renewal
-
-Otomatis: container `certbot` loop `certbot renew` tiap 12 jam; container
-`nginx` reload diri sendiri tiap 6 jam untuk ambil cert baru. Tak perlu cron.
+Prasyarat: DNS domain pointing ke IP server, port 80/443 publik, certbot
+issue + renew cert untuk tiap server block.
 
 ## Cleanup / reset
 
 ```sh
-docker compose down                                 # stop, keep volumes
-docker compose down -v                              # stop + drop pgdata + uploads
-COMPOSE_PROFILES=bundled-db docker compose down -v  # include bundled postgres
-# server TLS stack:
-docker compose -f docker-compose.yml -f docker-compose.tls.yml down
+docker compose down       # stop, keep volumes
+docker compose down -v    # stop + drop uploads volume
 ```
+
+Data Postgres tidak tersentuh `docker compose down` — DB instance eksternal.
 
 ## Verifikasi cepat
 
 ```sh
 curl -s -o /dev/null -w "web:    %{http_code}\n" http://localhost:3100/
 curl -s -o /dev/null -w "portal: %{http_code}\n" http://localhost:3101/
-curl -s -o /dev/null -w "nginx:  %{http_code}\n" http://localhost:8080/
 ```

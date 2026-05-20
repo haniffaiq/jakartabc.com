@@ -9,21 +9,20 @@ Foreign Direct Investment consulting site for Jakarta Business Center.
 ## Stack
 
 - Next.js 15 App Router + React 19
-- Payload v3 mounted at `/admin`, Postgres 16
+- Payload v3 mounted at `/admin`, Postgres 16 (shared/external instance)
 - next-intl (EN default, ID prefixed `/id`)
 - Tailwind CSS 3.4 + `@jakartabc/ui` tokens preset
-- Caddy 2 reverse proxy, automatic Let's Encrypt TLS
+- Native nginx reverse proxy on the server host (TLS, outside this repo)
 - pnpm 9 workspace + Turborepo
 
 ## Repo layout
 
 ```text
 apps/web              Next.js app (marketing + Payload admin)
+apps/portal           Next.js client portal
 packages/ui           Design tokens + base components
 packages/config       Shared eslint, tsconfig, prettier
-caddy/                Caddyfile
-docker-compose.yml    Production stack
-docker-compose.dev.yml Local postgres only
+docker-compose.yml    App-only stack (web + portal + web-migrate)
 ```
 
 The canonical local checkout path for Hanif's machine is:
@@ -55,10 +54,10 @@ Edit `.env` before booting the app. At minimum, set:
 - `NEXT_PUBLIC_SITE_URL`
 - `DEFAULT_LOCALE=en`
 
-Start the local database and app:
+Point `DATABASE_URL` at a reachable Postgres 16 (shared dev instance or a
+local one you manage), then start the app:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d
 pnpm --filter @jakartabc/web exec payload generate:types
 pnpm dev
 ```
@@ -136,7 +135,16 @@ Log out and back in as `deploy` after adding the user to the Docker group.
 
 ### 4. Point DNS at the VPS
 
-Create or update the `staging.jakartabc.com` A record to point at the VPS IPv4 address. Caddy will request the Let's Encrypt certificate after the stack starts and DNS resolves.
+Create or update the `staging.jakartabc.com` A record to point at the VPS IPv4 address.
+
+### 4b. Native nginx + TLS (host)
+
+The reverse proxy and TLS are handled by a native nginx on the server host,
+not by this compose stack. Set up nginx + certbot directly on the host and
+proxy to the app containers:
+
+- `web`   → `http://127.0.0.1:3100`
+- `portal` → `http://127.0.0.1:3101`
 
 ### 5. Clone and configure
 
@@ -153,7 +161,7 @@ Edit `.env` with production secrets. Do not commit `.env`.
 
 Important production values:
 
-- `DATABASE_URL=postgres://jakartabc:<password>@postgres:5432/jakartabc`
+- `DATABASE_URL` — shared/external Postgres. For a DB on the server host use `host.docker.internal` (e.g. `postgresql://USER:PW@host.docker.internal:5432/jakartabc`)
 - `PAYLOAD_SECRET=<32+ character random secret>`
 - `NEXT_PUBLIC_SITE_URL=https://staging.jakartabc.com`
 - `DEFAULT_LOCALE=en`
@@ -165,10 +173,11 @@ Important production values:
 docker compose pull
 docker compose up -d --build
 docker compose ps
-docker compose logs -f caddy
 ```
 
-Confirm that Caddy logs show successful TLS issuance.
+The `web-migrate` init container applies Payload migrations, then `web` and
+`portal` start. Confirm both containers are healthy, then verify the host
+nginx proxies them over TLS.
 
 ### 7. Create the first admin
 
@@ -207,7 +216,7 @@ After rollback, open the site and admin URL to confirm the previous version is h
 
 ## Backup (host cron)
 
-Create a backup directory owned by a restricted user and not served by Caddy:
+Create a backup directory owned by a restricted user and not served by nginx:
 
 ```bash
 sudo mkdir -p /backup
@@ -237,12 +246,8 @@ docker compose up -d web
 docker compose ps
 ```
 
-If Postgres is only reachable inside Docker, run `pg_dump` and `psql` through the postgres container instead:
-
-```bash
-docker compose exec -T postgres pg_dump -U jakartabc jakartabc | gzip > /backup/db-$(date +\%F).sql.gz
-gunzip < /backup/db-YYYY-MM-DD.sql.gz | docker compose exec -T postgres psql -U jakartabc jakartabc
-```
+Postgres runs as a shared/external instance — `pg_dump` and `psql` run
+against it directly from the host, not through a container.
 
 ## Secret rotation
 
@@ -260,7 +265,7 @@ After rotation, ask admins to sign in again and verify `/admin` works.
 ## Operational notes
 
 - Keep `.env` mode `0600` and owned by `deploy`.
-- Keep ports 80 and 443 open so Caddy can renew Let's Encrypt certificates.
+- Keep ports 80 and 443 open so the host nginx + certbot can renew TLS certificates.
 - Do not put production secrets in GitHub issues, PR comments, logs, or commits.
 - `staging.jakartabc.com` is the Phase 0 target. Production domain cutover is a later ops decision.
 
@@ -286,7 +291,7 @@ git pull
 docker compose up -d --build portal
 ```
 
-Caddy will auto-provision a TLS certificate for `app.jakartabc.com` on first request after DNS resolves.
+Add an `app.jakartabc.com` server block to the host nginx config proxying to `http://127.0.0.1:3101`, then issue its TLS certificate with certbot.
 
 **Creating the first portal user:**
 
