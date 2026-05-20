@@ -54,6 +54,10 @@ services:
         required: false
     networks:
       - internal
+    # Reach a Postgres running on the server host (DATABASE_URL points at
+    # host.docker.internal). `host-gateway` makes that name resolve on Linux.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     restart: 'no'
 
   web:
@@ -83,6 +87,8 @@ services:
       - uploads:/app/apps/web/uploads
     networks:
       - internal
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     expose:
       - '3000'
     ports:
@@ -109,6 +115,8 @@ services:
       NEXT_PUBLIC_PORTAL_URL: ${NEXT_PUBLIC_PORTAL_URL}
     networks:
       - internal
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     expose:
       - '3001'
     ports:
