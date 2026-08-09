@@ -1,3 +1,6 @@
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -208,5 +211,25 @@ describe('runBootstrapAdmin', () => {
     expect(writeInfo).toHaveBeenCalledWith('Initial admin created')
     expect(writeInfo.mock.calls.flat().join(' ')).not.toContain(validCredentials.email)
     expect(writeInfo.mock.calls.flat().join(' ')).not.toContain(validCredentials.password)
+  })
+})
+
+describe('initial admin runbook', () => {
+  it('keeps one-off credentials out of the parent shell and command arguments', async () => {
+    const readme = await readFile(resolve(process.cwd(), '../../README.md'), 'utf8')
+    const section = readme.split('### 7. Create the first admin')[1]?.split('## Deploy update')[0]
+
+    expect(section).toBeTruthy()
+    expect(section).not.toContain('export BOOTSTRAP_ADMIN_EMAIL')
+    expect(section).not.toContain('export BOOTSTRAP_ADMIN_PASSWORD')
+    expect(section).toContain('```bash\n(\n')
+    expect(section).toContain('\n)\n```')
+    expect(section).toContain('trap cleanup_bootstrap_admin EXIT')
+    expect(section).toContain("trap 'exit 130' INT")
+    expect(section).toContain('BOOTSTRAP_ADMIN_EMAIL="$bootstrap_admin_email"')
+    expect(section).toContain('BOOTSTRAP_ADMIN_PASSWORD="$bootstrap_admin_password"')
+    expect(section).toContain('-e BOOTSTRAP_ADMIN_EMAIL')
+    expect(section).toContain('-e BOOTSTRAP_ADMIN_PASSWORD')
+    expect(section).not.toMatch(/-e BOOTSTRAP_ADMIN_(?:EMAIL|PASSWORD)=/)
   })
 })

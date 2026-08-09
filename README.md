@@ -143,7 +143,7 @@ The reverse proxy and TLS are handled by a native nginx on the server host,
 not by this compose stack. Set up nginx + certbot directly on the host and
 proxy to the app containers:
 
-- `web`   → `http://127.0.0.1:3100`
+- `web` → `http://127.0.0.1:3100`
 - `portal` → `http://127.0.0.1:3101`
 
 ### 5. Clone and configure
@@ -186,25 +186,38 @@ an admin. Never run bootstrap commands concurrently. The password must contain a
 least 16 characters, including uppercase, lowercase, a number, and a symbol.
 
 ```bash
-read -rp 'Initial admin email: ' BOOTSTRAP_ADMIN_EMAIL
-read -rsp 'Initial admin password: ' BOOTSTRAP_ADMIN_PASSWORD
-printf '\n'
-export BOOTSTRAP_ADMIN_EMAIL BOOTSTRAP_ADMIN_PASSWORD
-docker compose run --rm \
-  -e BOOTSTRAP_ADMIN_EMAIL \
-  -e BOOTSTRAP_ADMIN_PASSWORD \
-  web-migrate pnpm --filter @jakartabc/web bootstrap:admin
-bootstrap_admin_status=$?
-unset BOOTSTRAP_ADMIN_EMAIL BOOTSTRAP_ADMIN_PASSWORD
-test "$bootstrap_admin_status" -eq 0
-unset bootstrap_admin_status
+(
+  bootstrap_admin_email=''
+  bootstrap_admin_password=''
+
+  cleanup_bootstrap_admin() {
+    unset bootstrap_admin_email bootstrap_admin_password
+  }
+  trap cleanup_bootstrap_admin EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
+
+  read -rp 'Initial admin email: ' bootstrap_admin_email
+  read -rsp 'Initial admin password: ' bootstrap_admin_password
+  printf '\n'
+
+  BOOTSTRAP_ADMIN_EMAIL="$bootstrap_admin_email" \
+  BOOTSTRAP_ADMIN_PASSWORD="$bootstrap_admin_password" \
+    docker compose run --rm \
+      -e BOOTSTRAP_ADMIN_EMAIL \
+      -e BOOTSTRAP_ADMIN_PASSWORD \
+      web-migrate pnpm --filter @jakartabc/web bootstrap:admin
+)
 ```
 
 The command refuses to run if any admin exists and never promotes an existing
 account. Do not add either bootstrap variable to `.env`, Compose, shell history,
-or shared runtime configuration. Unset both immediately even when the command
-fails. After success, sign in at `https://staging.jakartabc.com/admin`; all later
-users and roles are managed there by an admin.
+or shared runtime configuration. The prompt and command run in a subshell, and
+its exit and signal traps clean the local variables; the parent shell never
+receives the credentials. After success, sign in at
+`https://staging.jakartabc.com/admin`; all later users and roles are managed there
+by an admin.
 
 ## Deploy update
 
