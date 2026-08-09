@@ -2,19 +2,38 @@ import { expect, test } from '@playwright/test'
 
 const TEST_EMAIL = process.env.PORTAL_TEST_EMAIL ?? 'test-client@jakartabc.test'
 const TEST_PASS = process.env.PORTAL_TEST_PASS ?? 'change-me-test'
+const HOSTILE_NEXT_TARGETS = [
+  ['encoded scheme-relative path', '/%2f%2fevil.test'],
+  ['root dot segment', '/..//evil.test'],
+  ['nested dot segment', '/dashboard/..//evil.test'],
+  ['double-encoded dot segment', '/%252e%252e//evil.test'],
+] as const
+
+async function submitLogin(page: import('@playwright/test').Page) {
+  await page.locator('input[name="email"]').fill(TEST_EMAIL)
+  await page.locator('input[name="password"]').fill(TEST_PASS)
+  await page.getByRole('button', { name: /sign in/i }).click()
+}
 
 test.describe('portal auth', () => {
   test('login → dashboard → logout → login', async ({ page }) => {
     await page.goto('/login')
-    await page.locator('input[name="email"]').fill(TEST_EMAIL)
-    await page.locator('input[name="password"]').fill(TEST_PASS)
-    await page.getByRole('button', { name: /sign in/i }).click()
+    await submitLogin(page)
 
     await expect(page).toHaveURL(/\/dashboard/)
     await expect(page.getByText(/welcome/i)).toBeVisible()
 
+    const session = (await page.context().cookies()).find(
+      (cookie) => cookie.name === 'jbc_portal_session',
+    )
+    expect(session).toBeDefined()
+
     await page.getByRole('button', { name: /sign out/i }).click()
     await expect(page).toHaveURL(/\/login/)
+
+    await page.context().addCookies([session!])
+    await page.goto('/dashboard')
+    await expect(page).toHaveURL(/\/login$/)
   })
 
   test('invalid credentials show inline error', async ({ page }) => {
@@ -31,5 +50,37 @@ test.describe('portal auth', () => {
     await page.goto('/dashboard')
 
     await expect(page).toHaveURL(/\/login\?next=%2Fdashboard|\/login\?next=\/dashboard/)
+  })
+
+  for (const [name, next] of HOSTILE_NEXT_TARGETS) {
+    test(`hostile ${name} falls back to the same-origin dashboard`, async ({ page }) => {
+      await page.goto(`/login?${new URLSearchParams({ next }).toString()}`)
+      await submitLogin(page)
+
+      await expect(page).toHaveURL(/\/dashboard$/)
+      expect(new URL(page.url()).origin).not.toBe('https://evil.test')
+    })
+  }
+
+  test('valid same-origin next target keeps path, query, and hash', async ({ page }) => {
+    await page.goto('/login?next=%2Fdashboard%3Ftab%3Dfiles%23latest')
+    await submitLogin(page)
+
+    await expect(page).toHaveURL(/\/dashboard\?tab=files#latest$/)
+  })
+
+  test('a forged session cookie does not authorize the dashboard', async ({ page }) => {
+    await page.goto('/login')
+    await page.context().addCookies([
+      {
+        name: 'jbc_portal_session',
+        value: 'forged-token',
+        url: new URL(page.url()).origin,
+      },
+    ])
+
+    await page.goto('/dashboard')
+
+    await expect(page).toHaveURL(/\/login$/)
   })
 })

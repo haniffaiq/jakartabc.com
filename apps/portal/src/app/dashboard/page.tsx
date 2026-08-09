@@ -8,11 +8,12 @@ import { getCurrentUser } from '@/lib/auth'
 type PortalUser = {
   email?: string | null
   name?: string | null
+  role?: string | null
 }
 
 export default async function Dashboard() {
   const user = (await getCurrentUser()) as PortalUser | null
-  if (!user) redirect('/login')
+  if (user?.role !== 'client') redirect('/login')
 
   const displayName = user.name ?? user.email ?? 'client'
 
@@ -31,8 +32,8 @@ export default async function Dashboard() {
       <section className="mt-24 max-w-prose">
         <Eyebrow>Coming soon</Eyebrow>
         <p className="mt-4 text-body-md text-ink-700">
-          Document upload and PT PMA setup tracking land in the next portal release. For now, your partner
-          will continue to share status updates by email.
+          Document upload and PT PMA setup tracking land in the next portal release. For now, your
+          partner will continue to share status updates by email.
         </p>
       </section>
     </main>

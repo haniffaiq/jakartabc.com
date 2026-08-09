@@ -5,7 +5,7 @@ import { getCurrentUser } from '@/lib/auth'
 export default async function PortalRoot() {
   const user = await getCurrentUser()
 
-  if (user) redirect('/dashboard')
+  if (user?.role === 'client') redirect('/dashboard')
 
   redirect('/login')
 }
