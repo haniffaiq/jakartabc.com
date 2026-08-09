@@ -27,6 +27,9 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/extensions.json
 
+# agent worktrees
+.worktrees/
+
 # test
 coverage
 playwright-report
