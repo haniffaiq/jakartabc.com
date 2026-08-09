@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "exceptions": [
+    {
+      "id": "GHSA-w3rx-r6r6-pgpr",
+      "severity": "high",
+      "package": "image-size",
+      "expiresOn": "2026-09-09",
+      "owner": "JakartaBC platform owner",
+      "reason": "Payload 3.86.0 retains image-size 2.0.2 without a patched release; exposure remains until the Tasks 3 and 4 media controls are enforced.",
+      "upstreamFollowUp": "Track a patched Payload/image-size release and remove this exception: https://github.com/advisories/GHSA-w3rx-r6r6-pgpr"
+    },
+    {
+      "id": "GHSA-5p2g-fcmc-qvqq",
+      "severity": "high",
+      "package": "image-size",
+      "expiresOn": "2026-09-09",
+      "owner": "JakartaBC platform owner",
+      "reason": "Payload 3.86.0 retains image-size 2.0.2 without a patched release; exposure remains until the Tasks 3 and 4 media controls are enforced.",
+      "upstreamFollowUp": "Track a patched Payload/image-size release and remove this exception: https://github.com/advisories/GHSA-5p2g-fcmc-qvqq"
+    }
+  ],
+  "mitigationContract": {
+    "allowedMimeTypes": ["image/jpeg", "image/png", "image/webp"],
+    "rejectedFormats": ["AVIF", "HEIF", "JXL", "ICNS"],
+    "writeRoles": ["admin", "editor"],
+    "publicRead": true,
+    "trackedTasks": [3, 4]
+  }
+}

@@ -13,9 +13,10 @@ critical or high advisory and must reject both exceptions after 2026-09-09.
 
 ## Audit gate
 
-`pnpm audit:prod` runs a Node-based checker that invokes `pnpm audit --prod --json` itself.
-The checker evaluates the audit report even though pnpm exits non-zero when advisories are
-present. Approval is defined in code as the exact two-advisory set, so adding an entry to the
+`pnpm audit:prod` pipes `pnpm audit --prod --json` into a stdin-only Node checker. The checker is
+the final pipeline command, so it owns the gate result even though pnpm exits non-zero when
+allowed advisories are present. It fails closed on empty, malformed, error-shaped, or incomplete
+audit input. Approval is defined in code as the exact two-advisory set, so adding an entry to the
 metadata cannot broaden the gate silently.
 
 A machine-readable policy records each advisory's reason, owner, expiry, and upstream
@@ -26,7 +27,7 @@ evaluating the report. It exits non-zero when:
 - any high advisory is not one of the two approved IDs;
 - an approved advisory is present after its expiry date;
 - exception metadata is missing, duplicated, malformed, or broader than the approved set;
-- the audit command or JSON parsing fails.
+- the audit pipeline returns empty, malformed, error-shaped, or incomplete JSON.
 
 Moderate and lower advisories remain visible in audit output but do not fail this Task 1 gate.
 Raw `pnpm audit --prod` remains available for diagnosis; CI and documented release checks use

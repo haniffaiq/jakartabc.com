@@ -214,6 +214,10 @@ Expected: web 62/62 and portal 18/18 pass; UI has exactly the five known navy/oc
 - Modify: `apps/web/src/app/(payload)/layout.tsx`
 - Modify: `apps/web/src/app/(payload)/admin/[[...segments]]/page.tsx`
 - Modify: `apps/web/src/app/(payload)/admin/importMap.ts`
+- Create: `docs/security/production-audit-exceptions.json`
+- Create: `scripts/production-audit-policy.mjs`
+- Create: `scripts/production-audit-policy.test.mjs`
+- Create: `scripts/check-production-audit.mjs`
 
 - [ ] **Step 1: Write a manifest consistency test**
 
@@ -308,17 +312,42 @@ pnpm check:payload-versions
 pnpm install --frozen-lockfile
 pnpm lint
 pnpm typecheck
-pnpm --filter @jakartabc/web test
-pnpm --filter @jakartabc/portal test
-pnpm audit --prod
+pnpm --filter @jakartabc/web exec vitest run --maxWorkers=2
+pnpm --filter @jakartabc/portal exec vitest run --maxWorkers=2
+pnpm audit:prod
 ```
 
-Expected: version check, install, lint, typecheck, and existing passing suites exit 0; audit reports zero critical and high findings. Do not proceed while any critical/high finding remains.
+Expected: version check, install, lint, typecheck, and existing passing suites exit 0. The enforced audit gate permits only `GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq` through 2026-09-09; it rejects every other critical/high advisory and rejects both exceptions after that date.
 
-- [ ] **Step 8: Commit the exclusive dependency barrier**
+- [ ] **Step 8: Write the production audit policy tests and verify red**
+
+Create `scripts/production-audit-policy.test.mjs` using `node:test`. Import `validatePolicy` and `evaluateAuditReport` from `scripts/production-audit-policy.mjs`. Cover: both approved advisories pass on 2026-09-09; both fail on 2026-09-10; an unexpected high fails; any critical fails; extra/missing exception IDs fail; missing reason, owner, expiry, or upstream follow-up fails; and changes to the JPEG/PNG/WebP, AVIF/HEIF/JXL/ICNS, admin/editor write, or public-read contract fail.
+
+Run: `node --test scripts/production-audit-policy.test.mjs`
+
+Expected: FAIL because the policy module does not exist.
+
+- [ ] **Step 9: Implement the exact, expiring audit exception**
+
+Create `docs/security/production-audit-exceptions.json` with only the two approved GHSA IDs, `expiresOn: "2026-09-09"`, owner `JakartaBC platform owner`, a reason explaining the Payload 3.86.0 `image-size@2.0.2` dependency and not-yet-enforced Tasks 3/4 controls, and advisory/upstream follow-up links. Encode `allowedMimeTypes` as `image/jpeg`, `image/png`, `image/webp`; `rejectedFormats` as `AVIF`, `HEIF`, `JXL`, `ICNS`; `writeRoles` as `admin`, `editor`; and `publicRead: true`.
+
+`scripts/production-audit-policy.mjs` must hard-code the exact approved ID set independently of metadata, validate all metadata and mitigation values, treat 2026-09-09 as inclusive, and return failures for every unapproved critical/high advisory. `scripts/check-production-audit.mjs` must accept audit JSON only through stdin, fail closed on empty, malformed, error-shaped, or missing-advisory input, print allowed exceptions and all failures, and own the pipeline's final status. Add root script `"audit:prod": "pnpm audit --prod --json | node scripts/check-production-audit.mjs"`; raw `pnpm audit --prod` remains available for diagnosis.
+
+- [ ] **Step 10: Verify the audit policy and live gate**
+
+Run:
 
 ```bash
-git add .nvmrc package.json apps packages scripts/check-payload-versions.mjs pnpm-lock.yaml
+node --test scripts/production-audit-policy.test.mjs
+pnpm audit:prod
+```
+
+Expected: focused tests exit 0; the live gate reports exactly the two allowed `image-size` highs, retains the two visible moderate advisories, and exits 0.
+
+- [ ] **Step 11: Commit the exclusive dependency barrier**
+
+```bash
+git add .nvmrc package.json apps packages docs/security scripts/check-payload-versions.mjs scripts/check-production-audit.mjs scripts/production-audit-policy.mjs scripts/production-audit-policy.test.mjs pnpm-lock.yaml
 git commit -m "chore: upgrade Next and Payload security baseline"
 ```
 
@@ -1406,7 +1435,7 @@ Run `pnpm format`, inspect the complete formatting diff for accidental generated
 Run:
 
 ```bash
-pnpm audit --prod
+pnpm audit:prod
 pnpm format:check
 pnpm lint
 pnpm typecheck
@@ -1417,7 +1446,7 @@ pnpm test:e2e
 pnpm lighthouse
 ```
 
-Expected: every command exits 0; audit has zero critical/high; performance budgets pass on the production build.
+Expected: every command exits 0; the audit gate has no unapproved critical/high advisory and its exact temporary exceptions are unexpired; performance budgets pass on the production build.
 
 - [ ] **Step 11: Commit integration gates**
 
@@ -1475,7 +1504,7 @@ Run exactly:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm audit --prod
+pnpm audit:prod
 pnpm format:check
 pnpm lint
 pnpm typecheck
@@ -1511,7 +1540,7 @@ Invoke `superpowers:finishing-a-development-branch`. Present merge/PR/keep/disca
 
 ## Completion checklist mapped to the design
 
-- [ ] Platform: Next 16.2.11, all Payload packages exactly 3.86.0, zero critical/high audit.
+- [ ] Platform: Next 16.2.11, all Payload packages exactly 3.86.0, and no unapproved critical/high audit finding; the two exact `image-size` exceptions expire after 2026-09-09.
 - [ ] Security: enforced admin/editor/client matrix, direct anonymous lead APIs denied, client-only portal, safe redirects/URLs, trusted proxy, production Turnstile policy.
 - [ ] Shared infrastructure: external PostgreSQL, public-read MinIO `media/`, Redis rate/idempotency; same environment contract local/server.
 - [ ] Reliability: one durable row per submission, independent delivery status, retry command, explicit infrastructure errors, rollback-compatible migrations.

@@ -10,6 +10,7 @@
   "scripts": {
     "check:payload-versions": "node scripts/check-payload-versions.mjs",
     "check:security-overrides": "node scripts/check-security-overrides.mjs",
+    "audit:prod": "pnpm audit --prod --json | node scripts/check-production-audit.mjs",
     "build": "turbo run build --cache=local:rw",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint --cache=local:rw",

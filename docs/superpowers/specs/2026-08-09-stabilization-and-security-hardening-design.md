@@ -118,8 +118,8 @@ The first delivery gate upgrades the supported platform before behavior work:
 - Next.js to 16.2.11, the selected Active LTS release at design time;
 - Payload and every `@payloadcms/*` package to exactly 3.86.0;
 - React and companion packages to versions supported by that Next.js release;
-- direct and transitive production packages until the production audit has no
-  critical or high-severity findings;
+- direct and transitive production packages until the enforced production
+  audit gate has no unapproved critical or high-severity findings;
 - Payload-generated types and import maps after the upgrade;
 - committed database migrations for every Payload schema change.
 
@@ -129,6 +129,14 @@ production packages that remain vulnerable.
 
 The upgrade is its own gate because security and behavior fixes must be tested
 against the platform that will ship, not against obsolete framework behavior.
+
+Payload 3.86.0 temporarily retains `image-size@2.0.2`. Only
+`GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq` are allowed through
+2026-09-09; the gate fails for any other critical/high advisory or after the
+expiry. The exception is owned by the JakartaBC platform owner and tracked in
+machine-readable metadata with its reason and upstream follow-up. Tasks 3 and
+4 must limit media uploads to JPEG, PNG, and WebP, reject AVIF/HEIF/JXL/ICNS,
+limit writes to admin/editor, and preserve public reads.
 
 ## Authorization model
 
@@ -485,6 +493,8 @@ deterministically generated and checked or excluded with a documented reason.
 
 Automated tests prove:
 
+- the production audit rejects every unapproved critical/high advisory and
+  rejects the two exact `image-size` exceptions after 2026-09-09;
 - anonymous REST and GraphQL lead creation is denied;
 - `client` cannot open Payload admin;
 - `editor` can manage editorial resources but not users, leads, or client data;
@@ -538,7 +548,7 @@ container smoke tests.
 The final command set is:
 
 ```sh
-pnpm audit --prod
+pnpm audit:prod
 pnpm format:check
 pnpm lint
 pnpm typecheck
@@ -564,7 +574,8 @@ The rollout is staged so each gate is independently verifiable.
 2. Upgrade Next.js, React, Payload, and tightly coupled packages.
 3. Regenerate Payload types/import maps and create compatibility migrations.
 4. Restore lint, type-check, unit-test, and production-build baselines.
-5. Require zero critical and high production audit findings.
+5. Require no unapproved critical/high production audit finding and require
+   the two exact temporary exceptions to remain unexpired.
 
 ### Gate 2: security boundaries
 
