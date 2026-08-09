@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { unstable_cache as cache } from 'next/cache'
-import { getTranslations, unstable_setRequestLocale } from 'next-intl/server'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
 
 import {
   ContactBlock,
@@ -137,7 +137,7 @@ export default async function ServiceDetailPage({
   if (!routing.locales.includes(localeParam as Locale)) notFound()
 
   const locale = localeParam as Locale
-  unstable_setRequestLocale(locale)
+  setRequestLocale(locale)
 
   const t = await getTranslations('serviceDetail')
   const service = await getServiceBySlug(slug, locale)

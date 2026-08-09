@@ -8,6 +8,9 @@ export default defineConfig({
       '@payload-config': fileURLToPath(new URL('./src/payload.config.ts', import.meta.url)),
     },
   },
+  ssr: {
+    noExternal: ['next-intl'],
+  },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],

@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   }
 
   for (const tag of body.tags) {
-    revalidateTag(tag)
+    revalidateTag(tag, { expire: 0 })
   }
 
   return Response.json({ revalidated: body.tags })

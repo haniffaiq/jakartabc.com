@@ -1,7 +1,7 @@
 import React from 'react'
 import { DisplayHeading, Eyebrow, InsightCard } from '@jakartabc/ui'
 import { unstable_cache as cache } from 'next/cache'
-import { getTranslations, unstable_setRequestLocale } from 'next-intl/server'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
 
 import { LocalizedLink } from '@/components/LocalizedLink'
 import { type Locale, routing } from '@/i18n/routing'
@@ -84,7 +84,7 @@ export default async function InsightsListPage({
   const safeLocale = routing.locales.includes(locale as Locale)
     ? (locale as Locale)
     : routing.defaultLocale
-  unstable_setRequestLocale(safeLocale)
+  setRequestLocale(safeLocale)
   const t = await getTranslations('insights')
   const insights = await getInsights(safeLocale)
 

@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react'
 import { unstable_cache as cache } from 'next/cache'
 import { notFound } from 'next/navigation'
-import { getTranslations, unstable_setRequestLocale } from 'next-intl/server'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
 
 import { DisplayHeading, Eyebrow } from '@jakartabc/ui'
 
@@ -124,7 +124,7 @@ export default async function InsightDetailPage({
   if (!routing.locales.includes(locale as Locale)) notFound()
 
   const typedLocale = locale as InsightLocale
-  unstable_setRequestLocale(typedLocale)
+  setRequestLocale(typedLocale)
 
   const t = await getTranslations('insightDetail')
   const insight = await getInsightBySlug(slug, typedLocale).catch(() => null)

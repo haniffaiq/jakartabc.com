@@ -65,7 +65,7 @@ describe('POST /api/revalidate', () => {
 
     expect(res.status).toBe(200)
     await expect(res.json()).resolves.toEqual({ revalidated: ['a', 'b'] })
-    expect(revalidateTagMock).toHaveBeenCalledWith('a')
-    expect(revalidateTagMock).toHaveBeenCalledWith('b')
+    expect(revalidateTagMock).toHaveBeenCalledWith('a', { expire: 0 })
+    expect(revalidateTagMock).toHaveBeenCalledWith('b', { expire: 0 })
   })
 })

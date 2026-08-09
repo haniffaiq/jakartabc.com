@@ -24,9 +24,7 @@ const SECURITY_HEADERS = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
   images: {
     formats: ['image/avif', 'image/webp'],
   },

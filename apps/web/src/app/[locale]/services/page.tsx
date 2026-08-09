@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { unstable_cache as cache } from 'next/cache'
-import { getTranslations, unstable_setRequestLocale } from 'next-intl/server'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
 
 import { DisplayHeading, EditorialList, Eyebrow, RuleDivider } from '@jakartabc/ui'
 
@@ -74,7 +74,7 @@ export default async function ServicesIndexPage({
 }) {
   const { locale: localeParam } = await params
   const locale = localeParam as Locale
-  unstable_setRequestLocale(locale)
+  setRequestLocale(locale)
 
   const t = await getTranslations('services')
   const services = await getServices(locale)

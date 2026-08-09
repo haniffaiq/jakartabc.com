@@ -21,7 +21,7 @@ vi.mock('next-intl/server', () => ({
 
     return messages[key] ?? key
   }),
-  unstable_setRequestLocale: vi.fn(),
+  setRequestLocale: vi.fn(),
 }))
 
 vi.mock('@/lib/payload', () => ({

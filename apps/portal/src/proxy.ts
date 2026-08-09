@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const COOKIE_NAME = 'jbc_portal_session'
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname
 
   if (path.startsWith('/dashboard')) {

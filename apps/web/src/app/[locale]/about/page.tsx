@@ -1,5 +1,5 @@
 import { Button } from '@jakartabc/ui'
-import { getTranslations, unstable_setRequestLocale } from 'next-intl/server'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
 
 import { routing, type Locale } from '@/i18n/routing'
 
@@ -14,7 +14,7 @@ export default async function AboutPage({
   params: Promise<{ locale: string }>
 }) {
   const { locale } = await params
-  unstable_setRequestLocale(locale as Locale)
+  setRequestLocale(locale as Locale)
 
   const t = await getTranslations('about')
   const team = t.raw('team') as TeamMember[]

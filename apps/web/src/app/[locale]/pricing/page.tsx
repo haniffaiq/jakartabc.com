@@ -1,5 +1,5 @@
 import { Button, DisplayHeading, Eyebrow, PricingTable } from '@jakartabc/ui'
-import { getTranslations, unstable_setRequestLocale } from 'next-intl/server'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
 import { unstable_cache as cache } from 'next/cache'
 
 import { getPathname, routing, type Locale } from '@/i18n/routing'
@@ -61,7 +61,7 @@ export function toPricingRows(services: ServiceForPricing[]) {
 export default async function PricingPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale: localeParam } = await params
   const locale = localeParam as Locale
-  unstable_setRequestLocale(locale)
+  setRequestLocale(locale)
 
   const t = await getTranslations('pricing')
   const headers = t.raw('tableHeaders') as TableHeaders

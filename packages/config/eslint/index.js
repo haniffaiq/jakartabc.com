@@ -1,6 +1,7 @@
 // packages/config/eslint/index.js
 const tseslint = require('@typescript-eslint/eslint-plugin')
 const tsparser = require('@typescript-eslint/parser')
+const nextPlugin = require('@next/eslint-plugin-next')
 const reactPlugin = require('eslint-plugin-react')
 const reactHooks = require('eslint-plugin-react-hooks')
 const a11y = require('eslint-plugin-jsx-a11y')
@@ -20,12 +21,15 @@ module.exports = [
     },
     plugins: {
       '@typescript-eslint': tseslint,
+      '@next/next': nextPlugin,
       react: reactPlugin,
       'react-hooks': reactHooks,
       'jsx-a11y': a11y,
     },
     rules: {
       ...tseslint.configs.recommended.rules,
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs['core-web-vitals'].rules,
       ...reactPlugin.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
       ...a11y.configs.recommended.rules,
@@ -37,6 +41,12 @@ module.exports = [
   },
   prettier,
   {
-    ignores: ['**/dist/**', '**/.next/**', '**/.turbo/**', '**/node_modules/**'],
+    ignores: [
+      '**/dist/**',
+      '**/.next/**',
+      '**/.turbo/**',
+      '**/node_modules/**',
+      '**/src/migrations/**',
+    ],
   },
 ]

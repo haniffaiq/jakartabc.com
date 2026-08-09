@@ -1,5 +1,5 @@
 import { Button } from '@jakartabc/ui'
-import { getTranslations, unstable_setRequestLocale } from 'next-intl/server'
+import { getTranslations, setRequestLocale } from 'next-intl/server'
 
 import { routing, type Locale } from '@/i18n/routing'
 
@@ -25,7 +25,7 @@ const serviceIcons = ['◇', '◆', '◈', '❖']
 
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
-  unstable_setRequestLocale(locale as Locale)
+  setRequestLocale(locale as Locale)
 
   const t = await getTranslations('home')
   const services = t.raw('services') as HomeService[]
