@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -27,5 +28,26 @@ describe('portal Payload runtime configuration', () => {
     expect(mocks.postgresAdapter).toHaveBeenCalledWith({
       pool: { connectionString: mocks.env.DATABASE_URL },
     })
+  })
+
+  it('keeps the removed portal-only secret out of active configuration', () => {
+    const removedName = ['PORTAL', 'PAYLOAD', 'SECRET'].join('_')
+    const ciWorkflow = new URL('../../../.github/workflows/ci.yml', import.meta.url)
+    const activeConfigFiles = [
+      ciWorkflow,
+      new URL('../../../.github/workflows/lighthouse.yml', import.meta.url),
+      new URL('../../../.env.example', import.meta.url),
+      new URL('../../../docker-compose.yml', import.meta.url),
+      new URL('../Dockerfile', import.meta.url),
+      new URL('./payload.config.ts', import.meta.url),
+    ]
+
+    for (const file of activeConfigFiles) {
+      expect(readFileSync(file, 'utf8'), `${file.pathname} uses the removed name`).not.toContain(
+        removedName,
+      )
+    }
+
+    expect(readFileSync(ciWorkflow, 'utf8')).toMatch(/^\s+PAYLOAD_SECRET:/m)
   })
 })
