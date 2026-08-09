@@ -38,10 +38,9 @@ describe('Services collection', () => {
     expect(subnames).toEqual(expect.arrayContaining(['govFee', 'ourFee', 'currency']))
   })
 
-  it('revalidates service list, slug detail, and pricing tags after change', () => {
-    const hooks = Services.hooks?.afterChange ?? []
-
-    expect(hooks).toHaveLength(1)
+  it('revalidates service dependencies after changes and deletes', () => {
+    expect(Services.hooks?.afterChange).toHaveLength(1)
+    expect(Services.hooks?.afterDelete).toHaveLength(1)
   })
 
   it('keeps reads public and restricts mutations to editorial roles', () => {

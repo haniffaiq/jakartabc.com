@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { Insights } from './Insights'
 
@@ -12,6 +12,13 @@ type FieldLike = {
   unique?: boolean
   relationTo?: string | string[]
 }
+
+const originalEnv = { ...process.env }
+
+afterEach(() => {
+  process.env = { ...originalEnv }
+  vi.unstubAllGlobals()
+})
 
 describe('Insights collection', () => {
   it('has expected slug and fields', () => {
@@ -30,10 +37,11 @@ describe('Insights collection', () => {
         'regulationsCited',
         'publishedAt',
         'estReadTime',
-        'status',
         'seo',
       ]),
     )
+    expect(names).not.toContain('status')
+    expect(Insights.admin?.defaultColumns).toContain('_status')
   })
 
   it('localizes editorial title, lead, body, and SEO copy', () => {
@@ -84,5 +92,57 @@ describe('Insights collection', () => {
     expect(access.create?.(request('editor') as never)).toBe(true)
     expect(access.update?.(request('admin') as never)).toBe(true)
     expect(access.delete?.(request('client') as never)).toBe(false)
+  })
+
+  it('revalidates affected tags after changes and deletes', () => {
+    expect(Insights.hooks?.afterChange).toHaveLength(1)
+    expect(Insights.hooks?.afterDelete).toHaveLength(1)
+  })
+
+  it('invalidates old and new Insight dependencies after a relationship change', async () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://example.test'
+    process.env.REVALIDATE_SECRET = 'secret'
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    vi.stubGlobal('fetch', fetchMock)
+    const hook = Insights.hooks?.afterChange?.[0]
+    expect(hook).toBeTypeOf('function')
+
+    await hook?.({
+      doc: {
+        slug: 'new',
+        author: { id: 'author-new' },
+        category: { id: 'category-new' },
+        coverImage: { id: 'media-new' },
+        regulationsCited: [{ id: 'reg-new' }],
+      },
+      previousDoc: {
+        slug: 'old',
+        author: 'author-old',
+        category: 'category-old',
+        coverImage: 'media-old',
+        regulationsCited: ['reg-old'],
+      },
+      req: { payload: { logger: {} } },
+    } as never)
+
+    const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)
+    expect(body.tags).toEqual(
+      expect.arrayContaining([
+        'insights:en',
+        'insight:en:new',
+        'insight:en:old',
+        'author:en:author-new',
+        'author:en:author-old',
+        'category:en:category-new',
+        'category:en:category-old',
+        'regulation:en:reg-new',
+        'regulation:en:reg-old',
+        'media:en:media-new',
+        'media:en:media-old',
+        'insights:id',
+        'insight:id:new',
+        'insight:id:old',
+      ]),
+    )
   })
 })

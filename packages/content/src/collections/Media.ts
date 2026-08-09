@@ -5,6 +5,8 @@ import { ValidationError } from 'payload'
 import { sanitizeFilename } from 'payload/shared'
 
 import { editorialOnly } from '../access/roles'
+import { mediaTags, type CacheTagId } from '../cache/tags'
+import { makeRevalidateDeleteHook, makeRevalidateHook } from '../hooks/revalidate'
 
 export const MEDIA_MAX_FILE_SIZE = 5_000_000
 export const MEDIA_STORAGE_PREFIX = 'media'
@@ -25,6 +27,11 @@ const serverOwnedMediaFields = [
   'height',
   'sizes',
 ] as const
+
+type MediaTagDocument = { id?: CacheTagId }
+
+const buildMediaTags = (doc: MediaTagDocument, previousDoc?: MediaTagDocument) =>
+  mediaTags({ id: doc.id, previousId: previousDoc?.id, locales: ['en', 'id'] })
 
 function hasPrefix(data: Buffer, signature: readonly number[]) {
   return signature.every((byte, index) => data[index] === byte)
@@ -240,6 +247,8 @@ export const Media: CollectionConfig = {
     delete: editorialOnly,
   },
   hooks: {
+    afterChange: [makeRevalidateHook<MediaTagDocument>(buildMediaTags)],
+    afterDelete: [makeRevalidateDeleteHook<MediaTagDocument>((doc) => buildMediaTags(doc))],
     beforeChange: [preventNoFileMediaIdentityChanges],
     beforeOperation: [validateMediaUploadBeforeOperation],
   },

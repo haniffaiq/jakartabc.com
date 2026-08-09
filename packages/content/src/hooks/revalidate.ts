@@ -1,4 +1,8 @@
-import type { CollectionAfterChangeHook, GlobalAfterChangeHook } from 'payload'
+import type {
+  CollectionAfterChangeHook,
+  CollectionAfterDeleteHook,
+  GlobalAfterChangeHook,
+} from 'payload'
 
 type RevalidateLogger = {
   info?: (message: string) => void
@@ -44,15 +48,26 @@ const postRevalidate = async (tags: string[], logger?: RevalidateLogger) => {
     }
 
     logger?.info?.(`Revalidated ${tags.join(', ')}`)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    logger?.error?.(`Revalidate request failed: ${message}`)
+  } catch {
+    logger?.error?.('Revalidate request failed')
   }
 }
 
 export function makeRevalidateHook<TDoc = unknown>(
-  buildTags: (doc: TDoc) => string[],
+  buildTags: (doc: TDoc, previousDoc?: TDoc) => string[],
 ): CollectionAfterChangeHook {
+  return async ({ doc, previousDoc, req }) => {
+    await postRevalidate(
+      buildTags(doc as TDoc, previousDoc as TDoc | undefined),
+      getLogger({ req }),
+    )
+    return doc
+  }
+}
+
+export function makeRevalidateDeleteHook<TDoc = unknown>(
+  buildTags: (doc: TDoc) => string[],
+): CollectionAfterDeleteHook {
   return async ({ doc, req }) => {
     await postRevalidate(buildTags(doc as TDoc), getLogger({ req }))
     return doc
