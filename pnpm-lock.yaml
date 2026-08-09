@@ -35,6 +35,9 @@ importers:
 
   apps/portal:
     dependencies:
+      '@jakartabc/content':
+        specifier: workspace:*
+        version: link:../../packages/content
       '@jakartabc/ui':
         specifier: workspace:*
         version: link:../../packages/ui
