@@ -16,16 +16,8 @@ services:
       dockerfile: apps/web/Dockerfile
       target: builder
       args:
-        DATABASE_URL: ${DATABASE_URL}
-        PAYLOAD_SECRET: ${PAYLOAD_SECRET}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
         DEFAULT_LOCALE: ${DEFAULT_LOCALE:-en}
-        REVALIDATE_SECRET: ${REVALIDATE_SECRET}
-        EMAIL_PROVIDER: ${EMAIL_PROVIDER:-resend}
-        RESEND_API_KEY: ${RESEND_API_KEY}
-        EMAIL_FROM: ${EMAIL_FROM}
-        SALES_EMAIL: ${SALES_EMAIL}
-        TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY}
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY}
     env_file: .env
     environment:
@@ -45,16 +37,8 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        DATABASE_URL: ${DATABASE_URL}
-        PAYLOAD_SECRET: ${PAYLOAD_SECRET}
         NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
         DEFAULT_LOCALE: ${DEFAULT_LOCALE:-en}
-        REVALIDATE_SECRET: ${REVALIDATE_SECRET}
-        EMAIL_PROVIDER: ${EMAIL_PROVIDER:-resend}
-        RESEND_API_KEY: ${RESEND_API_KEY}
-        EMAIL_FROM: ${EMAIL_FROM}
-        SALES_EMAIL: ${SALES_EMAIL}
-        TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY}
         NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY}
     env_file: .env
     restart: unless-stopped
@@ -79,20 +63,12 @@ services:
       context: .
       dockerfile: apps/portal/Dockerfile
       args:
-        DATABASE_URL: ${DATABASE_URL}
-        PAYLOAD_SECRET: ${PAYLOAD_SECRET}
-        PORTAL_COOKIE_DOMAIN: ${PORTAL_COOKIE_DOMAIN:-app.jakartabc.com}
         NEXT_PUBLIC_PORTAL_URL: ${NEXT_PUBLIC_PORTAL_URL}
     env_file: .env
     restart: unless-stopped
     depends_on:
       web-migrate:
         condition: service_completed_successfully
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      PAYLOAD_SECRET: ${PAYLOAD_SECRET}
-      PORTAL_COOKIE_DOMAIN: ${PORTAL_COOKIE_DOMAIN}
-      NEXT_PUBLIC_PORTAL_URL: ${NEXT_PUBLIC_PORTAL_URL}
     networks:
       - internal
     extra_hosts:

@@ -34,28 +34,33 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-# Build-time env (next build imports src/env.ts which zod-validates)
-ARG DATABASE_URL
-ARG PAYLOAD_SECRET
+# Public values are compiled into the client bundle.
 ARG NEXT_PUBLIC_SITE_URL
 ARG DEFAULT_LOCALE=en
-ARG REVALIDATE_SECRET
-ARG EMAIL_PROVIDER=resend
-ARG RESEND_API_KEY
-ARG EMAIL_FROM
-ARG SALES_EMAIL
-ARG TURNSTILE_SECRET_KEY
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
-ENV DATABASE_URL=$DATABASE_URL \
-    PAYLOAD_SECRET=$PAYLOAD_SECRET \
+
+# next build imports src/env.ts. These deterministic values only satisfy
+# validation; real runtime configuration arrives through the container env.
+ENV DATABASE_URL=postgres://build:build@127.0.0.1:5432/build \
+    PAYLOAD_SECRET=build-only-payload-secret-not-for-runtime \
+    REDIS_URL=redis://127.0.0.1:6379 \
+    REDIS_KEY_PREFIX=jakartabc:build \
+    MINIO_ENDPOINT=http://127.0.0.1:9000 \
+    MINIO_REGION=us-east-1 \
+    MINIO_BUCKET=jakartabc-build \
+    MINIO_ACCESS_KEY=build-only-minio-access-key \
+    MINIO_SECRET_KEY=build-only-minio-secret-key \
+    MINIO_PUBLIC_URL=http://127.0.0.1:9000/jakartabc-build \
+    MINIO_FORCE_PATH_STYLE=true \
+    TRUSTED_PROXY_SECRET=build-only-proxy-secret-not-for-runtime \
     NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     DEFAULT_LOCALE=$DEFAULT_LOCALE \
-    REVALIDATE_SECRET=$REVALIDATE_SECRET \
-    EMAIL_PROVIDER=$EMAIL_PROVIDER \
-    RESEND_API_KEY=$RESEND_API_KEY \
-    EMAIL_FROM=$EMAIL_FROM \
-    SALES_EMAIL=$SALES_EMAIL \
-    TURNSTILE_SECRET_KEY=$TURNSTILE_SECRET_KEY \
+    REVALIDATE_SECRET=build-only-revalidation-secret \
+    EMAIL_PROVIDER=resend \
+    RESEND_API_KEY=build-only-resend-key \
+    EMAIL_FROM=build@example.invalid \
+    SALES_EMAIL=build@example.invalid \
+    TURNSTILE_SECRET_KEY=build-only-turnstile-secret \
     NEXT_PUBLIC_TURNSTILE_SITE_KEY=$NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
 # Build does not connect to DB — DATABASE_URL only needs to pass zod

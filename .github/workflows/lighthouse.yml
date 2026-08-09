@@ -30,9 +30,26 @@ jobs:
 
     env:
       DATABASE_URL: postgres://jakartabc:jakartabc@localhost:5432/jakartabc
-      PAYLOAD_SECRET: ci-secret-32-chars-minimum-padding-xx
+      PAYLOAD_SECRET: ci-build-only-payload-secret-not-runtime
+      REDIS_URL: redis://localhost:6379
+      REDIS_KEY_PREFIX: jakartabc:ci
+      MINIO_ENDPOINT: http://localhost:9000
+      MINIO_REGION: us-east-1
+      MINIO_BUCKET: jakartabc-ci
+      MINIO_ACCESS_KEY: ci-build-only-minio-access
+      MINIO_SECRET_KEY: ci-build-only-minio-secret
+      MINIO_PUBLIC_URL: http://localhost:9000/jakartabc-ci
+      MINIO_FORCE_PATH_STYLE: 'true'
+      TRUSTED_PROXY_SECRET: ci-build-only-proxy-secret-not-runtime
       NEXT_PUBLIC_SITE_URL: http://localhost:3000
       DEFAULT_LOCALE: en
+      REVALIDATE_SECRET: ci-build-only-revalidation-secret
+      EMAIL_PROVIDER: resend
+      RESEND_API_KEY: ci-build-only-resend-key
+      EMAIL_FROM: ci@example.invalid
+      SALES_EMAIL: ci@example.invalid
+      TURNSTILE_SECRET_KEY: ci-build-only-turnstile-secret
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: ci-build-only-turnstile-site-key
 
     steps:
       - uses: actions/checkout@v4

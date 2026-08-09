@@ -11,6 +11,13 @@ const turnstileTestSecrets = new Set([
   '2x0000000000000000000000000000000AA',
   '3x0000000000000000000000000000000AA',
 ])
+const turnstileTestSiteKeys = new Set([
+  '1x00000000000000000000AA',
+  '2x00000000000000000000AB',
+  '1x00000000000000000000BB',
+  '2x00000000000000000000BB',
+  '3x00000000000000000000FF',
+])
 
 const Server = z
   .object({
@@ -40,6 +47,9 @@ const Server = z
     SMTP_USER: optionalString,
     SMTP_PASS: optionalString,
     TURNSTILE_SECRET_KEY: z.string().min(8, 'TURNSTILE_SECRET_KEY must be at least 8 chars'),
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: z
+      .string()
+      .min(8, 'NEXT_PUBLIC_TURNSTILE_SITE_KEY must be at least 8 chars'),
   })
   .refine(
     (env) =>
@@ -54,6 +64,16 @@ const Server = z
         code: z.ZodIssueCode.custom,
         message: 'Turnstile test credential is not allowed in production',
         path: ['TURNSTILE_SECRET_KEY'],
+      })
+    }
+    if (
+      env.NODE_ENV === 'production' &&
+      turnstileTestSiteKeys.has(env.NEXT_PUBLIC_TURNSTILE_SITE_KEY)
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Turnstile test credential is not allowed in production',
+        path: ['NEXT_PUBLIC_TURNSTILE_SITE_KEY'],
       })
     }
   })

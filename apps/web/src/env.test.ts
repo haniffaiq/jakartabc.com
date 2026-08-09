@@ -93,6 +93,40 @@ describe('env schema', () => {
     ).toThrow(/test credential/i)
   })
 
+  it.each([
+    '1x00000000000000000000AA',
+    '2x00000000000000000000AB',
+    '1x00000000000000000000BB',
+    '2x00000000000000000000BB',
+    '3x00000000000000000000FF',
+  ])('rejects documented Turnstile site test credential %s in production', async (siteKey) => {
+    setValidEnv()
+    const mod = await importEnvCase(`production-site-${siteKey}`)
+
+    expect(() =>
+      mod.parseServerEnv({
+        ...process.env,
+        NODE_ENV: 'production',
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: siteKey,
+      }),
+    ).toThrow(/test credential/i)
+  })
+
+  it('accepts a non-test Turnstile credential pair in production', async () => {
+    setValidEnv()
+    const mod = await importEnvCase('production-turnstile-valid')
+
+    const parsed = mod.parseServerEnv({
+      ...process.env,
+      NODE_ENV: 'production',
+      TURNSTILE_SECRET_KEY: 'production-turnstile-secret',
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: 'production-turnstile-site-key',
+    })
+
+    expect(parsed.TURNSTILE_SECRET_KEY).toBe('production-turnstile-secret')
+    expect(parsed.NEXT_PUBLIC_TURNSTILE_SITE_KEY).toBe('production-turnstile-site-key')
+  })
+
   it('accepts SMTP when SMTP credentials are configured', async () => {
     setValidEnv({
       EMAIL_PROVIDER: 'smtp',

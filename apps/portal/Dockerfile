@@ -32,13 +32,13 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
-ARG DATABASE_URL
-ARG PAYLOAD_SECRET
-ARG PORTAL_COOKIE_DOMAIN
 ARG NEXT_PUBLIC_PORTAL_URL
-ENV DATABASE_URL=$DATABASE_URL \
-    PAYLOAD_SECRET=$PAYLOAD_SECRET \
-    PORTAL_COOKIE_DOMAIN=$PORTAL_COOKIE_DOMAIN \
+
+# Build-only placeholders. Runtime values are supplied through env_file and
+# are never accepted as image build arguments.
+ENV DATABASE_URL=postgres://build:build@127.0.0.1:5432/build \
+    PAYLOAD_SECRET=build-only-payload-secret-not-for-runtime \
+    PORTAL_COOKIE_DOMAIN=build.invalid \
     NEXT_PUBLIC_PORTAL_URL=$NEXT_PUBLIC_PORTAL_URL
 
 RUN mkdir -p apps/portal/public
