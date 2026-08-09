@@ -1,14 +1,14 @@
 import type { CollectionConfig } from 'payload'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 
-import { editorialOnly, publishedOrEditorial } from '../access/roles'
+import { editorialOnly } from '../access/roles'
 
 export const Regulations: CollectionConfig = {
   slug: 'regulations',
   admin: { group: 'Editorial', useAsTitle: 'code' },
   access: {
     create: editorialOnly,
-    read: publishedOrEditorial,
+    read: () => true,
     update: editorialOnly,
     delete: editorialOnly,
   },

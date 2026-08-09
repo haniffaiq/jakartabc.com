@@ -15,10 +15,11 @@ describe('Categories collection', () => {
     expect(name && 'localized' in name && name.localized).toBe(true)
   })
 
-  it('allows published reads and restricts mutations to editorial roles', () => {
+  it('keeps reads public and restricts mutations to editorial roles', () => {
     const access = Categories.access!
 
-    expect(access.read?.(request() as never)).toEqual({ _status: { equals: 'published' } })
+    expect(access.read?.(request() as never)).toBe(true)
+    expect(access.read?.(request('client') as never)).toBe(true)
     expect(access.read?.(request('editor') as never)).toBe(true)
     expect(access.create?.(request('editor') as never)).toBe(true)
     expect(access.update?.(request('admin') as never)).toBe(true)

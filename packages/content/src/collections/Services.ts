@@ -1,7 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 
-import { editorialOnly, publishedOrEditorial } from '../access/roles'
+import { editorialOnly } from '../access/roles'
 import { makeRevalidateHook } from '../hooks/revalidate'
 
 export const Services: CollectionConfig = {
@@ -13,7 +13,7 @@ export const Services: CollectionConfig = {
   },
   access: {
     create: editorialOnly,
-    read: publishedOrEditorial,
+    read: () => true,
     update: editorialOnly,
     delete: editorialOnly,
   },

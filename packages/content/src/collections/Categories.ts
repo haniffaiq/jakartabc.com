@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 
-import { editorialOnly, publishedOrEditorial } from '../access/roles'
+import { editorialOnly } from '../access/roles'
 
 export const Categories: CollectionConfig = {
   slug: 'categories',
@@ -10,7 +10,7 @@ export const Categories: CollectionConfig = {
   },
   access: {
     create: editorialOnly,
-    read: publishedOrEditorial,
+    read: () => true,
     update: editorialOnly,
     delete: editorialOnly,
   },
