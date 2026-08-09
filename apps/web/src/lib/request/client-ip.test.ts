@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getTrustedClientIp } from './client-ip'
+import { getClientIP } from './client-ip'
 
 const secret = 'proxy-secret-value-that-is-at-least-32-characters'
 
@@ -19,7 +19,7 @@ describe('trusted client IP', () => {
       'x-forwarded-for': ' 2001:0db8:0:0:0:0:0:1 , 198.51.100.4',
     })
 
-    expect(getTrustedClientIp(requestHeaders, secret)).toBe('2001:db8::1')
+    expect(getClientIP(requestHeaders, secret)).toBe('2001:db8::1')
   })
 
   it.each([null, 'wrong-secret', `${secret}-suffix`, secret.slice(1)])(
@@ -32,7 +32,7 @@ describe('trusted client IP', () => {
         'cf-connecting-ip': '203.0.113.10',
       })
 
-      expect(getTrustedClientIp(requestHeaders, secret)).toBe('unknown')
+      expect(getClientIP(requestHeaders, secret)).toBe('unknown')
     },
   )
 
@@ -49,7 +49,7 @@ describe('trusted client IP', () => {
       'x-forwarded-for': forwarded,
     })
 
-    expect(getTrustedClientIp(requestHeaders, secret)).toBe('unknown')
+    expect(getClientIP(requestHeaders, secret)).toBe('unknown')
   })
 
   it('never trusts cf-connecting-ip even with valid proxy proof', () => {
@@ -59,6 +59,6 @@ describe('trusted client IP', () => {
       'cf-connecting-ip': '203.0.113.10',
     })
 
-    expect(getTrustedClientIp(requestHeaders, secret)).toBe('unknown')
+    expect(getClientIP(requestHeaders, secret)).toBe('unknown')
   })
 })

@@ -49,6 +49,8 @@ const goodData = new Map<string, string>([
   ['turnstileToken', 'tok_x'],
 ])
 
+const trustedProxySecret = 'proxy-secret-value-that-is-at-least-32-characters'
+
 function fd(map = goodData) {
   const formData = new FormData()
   for (const [key, value] of map.entries()) formData.append(key, value)
@@ -72,9 +74,15 @@ describe('submitBooking', () => {
     limitMock.mockResolvedValue({ allowed: true, remaining: 4 })
     sendMock.mockResolvedValue({ ok: true, id: 'm_1' })
     createMock.mockResolvedValue({ id: 42 })
-    headersMock.mockResolvedValue(new Headers({ 'x-forwarded-for': '1.2.3.4, 10.0.0.2' }))
+    headersMock.mockResolvedValue(
+      new Headers({
+        'x-jbc-proxy-secret': trustedProxySecret,
+        'x-forwarded-for': '1.2.3.4, 10.0.0.2',
+      }),
+    )
     process.env.SALES_EMAIL = 'sales@example.co'
     process.env.NEXT_PUBLIC_SITE_URL = 'https://jakartabc.com'
+    process.env.TRUSTED_PROXY_SECRET = trustedProxySecret
   })
 
   it('creates a booking lead, sends sales and visitor email, and returns ok', async () => {
@@ -192,7 +200,8 @@ describe('submitBooking', () => {
   it('uses the trusted forwarded request IP for Turnstile and rate-limit keys', async () => {
     headersMock.mockResolvedValueOnce(
       new Headers({
-        'x-forwarded-for': '203.0.113.44, 10.0.0.5',
+        'x-jbc-proxy-secret': trustedProxySecret,
+        'x-forwarded-for': '2001:0db8:0:0:0:0:0:1, 10.0.0.5',
         'x-real-ip': '198.51.100.7',
       }),
     )
@@ -200,8 +209,25 @@ describe('submitBooking', () => {
     const res = await submitBooking(fd())
 
     expect(res.ok).toBe(true)
-    expect(verifyMock).toHaveBeenCalledWith('tok_x', '203.0.113.44')
-    expect(limitMock).toHaveBeenCalledWith('booking', '203.0.113.44:maria@example.co')
+    expect(verifyMock).toHaveBeenCalledWith('tok_x', '2001:db8::1')
+    expect(limitMock).toHaveBeenCalledWith('booking', '2001:db8::1:maria@example.co')
+  })
+
+  it('ignores spoofed forwarding headers with invalid proxy proof', async () => {
+    headersMock.mockResolvedValueOnce(
+      new Headers({
+        'x-jbc-proxy-secret': 'invalid-proof',
+        'x-forwarded-for': '203.0.113.44',
+        'cf-connecting-ip': '198.51.100.7',
+        'x-real-ip': '192.0.2.8',
+      }),
+    )
+
+    const res = await submitBooking(fd())
+
+    expect(res.ok).toBe(true)
+    expect(verifyMock).toHaveBeenCalledWith('tok_x', 'unknown')
+    expect(limitMock).toHaveBeenCalledWith('booking', 'unknown:maria@example.co')
   })
 
   it('still returns ok when the visitor email fails after sales email succeeds', async () => {

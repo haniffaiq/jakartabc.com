@@ -55,6 +55,8 @@ const validContact = {
   turnstileToken: 'turnstile-token',
 }
 
+const trustedProxySecret = 'proxy-secret-value-that-is-at-least-32-characters'
+
 describe('submitContact', () => {
   beforeEach(() => {
     mocks.create.mockReset()
@@ -65,14 +67,17 @@ describe('submitContact', () => {
 
     mocks.verifyTurnstile.mockResolvedValue(true)
     mocks.rateLimit.mockResolvedValue({ allowed: true, remaining: 4 })
-    mocks.headersGet.mockImplementation((name: string) =>
-      name.toLowerCase() === 'x-forwarded-for' ? '1.1.1.1, 2.2.2.2' : null,
-    )
+    mocks.headersGet.mockImplementation((name: string) => {
+      if (name.toLowerCase() === 'x-jbc-proxy-secret') return trustedProxySecret
+      if (name.toLowerCase() === 'x-forwarded-for') return '1.1.1.1, 2.2.2.2'
+      return null
+    })
     mocks.create.mockResolvedValue({ id: 7 })
     mocks.sendEmail.mockResolvedValue({ ok: true, id: 'message-id' })
 
     process.env.SALES_EMAIL = 'sales@example.com'
     process.env.NEXT_PUBLIC_SITE_URL = 'https://jakartabc.com'
+    process.env.TRUSTED_PROXY_SECRET = trustedProxySecret
   })
 
   it('persists the contact message and sends sales plus visitor emails', async () => {
@@ -152,6 +157,25 @@ describe('submitContact', () => {
     expect(mocks.create).not.toHaveBeenCalled()
     expect(mocks.sendEmail).not.toHaveBeenCalled()
   })
+
+  it.each([null, 'invalid-proxy-proof'])(
+    'ignores spoofed forwarding headers when proxy proof is %s',
+    async (proof) => {
+      mocks.headersGet.mockImplementation((name: string) => {
+        if (name.toLowerCase() === 'x-jbc-proxy-secret') return proof
+        if (name.toLowerCase() === 'x-forwarded-for') return '203.0.113.44'
+        if (name.toLowerCase() === 'cf-connecting-ip') return '198.51.100.7'
+        if (name.toLowerCase() === 'x-real-ip') return '192.0.2.8'
+        return null
+      })
+
+      const result = await submitContact(fd(validContact))
+
+      expect(result).toEqual({ ok: true })
+      expect(mocks.verifyTurnstile).toHaveBeenCalledWith('turnstile-token', 'unknown')
+      expect(mocks.rateLimit).toHaveBeenCalledWith('contact', 'unknown:sari@example.com')
+    },
+  )
 
   it('requires sales email configuration before anti-spam or persistence', async () => {
     delete process.env.SALES_EMAIL

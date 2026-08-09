@@ -12,6 +12,8 @@ describe('verifyTurnstile', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
     if (originalTurnstileSecret === undefined) {
       delete process.env.TURNSTILE_SECRET_KEY
     } else {
@@ -121,6 +123,35 @@ describe('verifyTurnstile', () => {
     const { verifyTurnstile } = await import('./turnstile')
 
     await expect(verifyTurnstile('tok', '1.2.3.4')).resolves.toBe(false)
+  })
+
+  it('aborts a stalled verification at the bounded timeout without sensitive logs', async () => {
+    vi.useFakeTimers()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const fetchMock = vi.fn(
+      async (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('verification aborted', 'AbortError')),
+            { once: true },
+          )
+        }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { TURNSTILE_TIMEOUT_MS, verifyTurnstile } = await import('./turnstile')
+    const verification = verifyTurnstile('sensitive-visitor-token', '203.0.113.9')
+    const expectation = expect(verification).resolves.toBe(false)
+
+    await vi.advanceTimersByTimeAsync(TURNSTILE_TIMEOUT_MS)
+    await expectation
+
+    const signal = fetchMock.mock.calls[0]?.[1]?.signal
+    expect(signal?.aborted).toBe(true)
+    expect(consoleError).not.toHaveBeenCalled()
+    expect(consoleWarn).not.toHaveBeenCalled()
   })
 
   it('returns false without calling the API when the secret is missing', async () => {

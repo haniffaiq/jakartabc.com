@@ -33,6 +33,12 @@ class FakeIdempotencyRedis {
 
   async eval(script: string, options: { keys: string[]; arguments: string[] }) {
     this.evalCalls.push({ script, ...options })
+    if (options.keys.length > 1) {
+      const hashTags = options.keys.map((key) => key.match(/\{([^{}]+)\}/)?.[1])
+      if (!hashTags[0] || hashTags.some((hashTag) => hashTag !== hashTags[0])) {
+        throw new Error('CROSSSLOT Keys in request do not hash to the same slot')
+      }
+    }
     const lockKey = options.keys[0] ?? ''
     const token = options.arguments[0] ?? ''
     if (this.values.get(lockKey) !== token) return 0
@@ -69,14 +75,18 @@ describe('submission idempotency coordinator', () => {
     expect(acquired.state).toBe('acquired')
     if (acquired.state !== 'acquired') throw new Error('expected acquired lease')
     expect(await coordinator.acquire(id)).toEqual({ state: 'in-progress' })
-    await coordinator.complete(acquired.lease)
+    await expect(coordinator.complete(acquired.lease)).resolves.toEqual({ state: 'completed' })
     expect(await coordinator.acquire(id)).toEqual({ state: 'completed' })
 
     expect(redis.setCalls[0]?.options).toEqual({ NX: true, EX: 30 })
-    const completedKey = [...redis.ttls.keys()].find((key) => key.includes(':completed:'))
+    const completedKey = [...redis.ttls.keys()].find((key) => key.endsWith(':completed'))
     expect(completedKey).toBeDefined()
     expect(redis.ttls.get(completedKey ?? '')).toBe(86_400)
-    expect(redis.evalCalls.find((call) => call.keys.length === 2)?.script).toMatch(/SET/)
+    const completeCall = redis.evalCalls.find((call) => call.keys.length === 2)
+    expect(completeCall?.script).toMatch(/SET/)
+    const completeHashTags = completeCall?.keys.map((key) => key.match(/\{([^{}]+)\}/)?.[1])
+    expect(completeHashTags?.[0]).toMatch(/^[a-f0-9]{64}$/)
+    expect(completeHashTags?.[0]).toBe(completeHashTags?.[1])
   })
 
   it('never puts the raw submission identifier in Redis keys', async () => {
@@ -94,8 +104,8 @@ describe('submission idempotency coordinator', () => {
 
     expect([...redis.values.keys(), ...redis.setCalls.map(({ key }) => key)]).toEqual(
       expect.arrayContaining([
-        expect.stringMatching(/^jakartabc:test:submission:lock:[a-f0-9]{64}$/),
-        expect.stringMatching(/^jakartabc:test:submission:completed:[a-f0-9]{64}$/),
+        expect.stringMatching(/^jakartabc:test:submission:\{[a-f0-9]{64}\}:lock$/),
+        expect.stringMatching(/^jakartabc:test:submission:\{[a-f0-9]{64}\}:completed$/),
       ]),
     )
     expect(JSON.stringify(redis.setCalls)).not.toContain(id)
@@ -118,21 +128,40 @@ describe('submission idempotency coordinator', () => {
     const requestB = await coordinator.acquire(id)
     if (requestB.state !== 'acquired') throw new Error('expected request B lease')
 
-    await coordinator.release(requestA.lease)
-    await coordinator.complete(requestA.lease)
+    await expect(coordinator.release(requestA.lease)).resolves.toEqual({ state: 'lease-lost' })
+    await expect(coordinator.complete(requestA.lease)).resolves.toEqual({ state: 'lease-lost' })
 
     expect(redis.values.get(lockKey)).toBe(requestB.lease.token)
     expect(
-      redis.values.has([...redis.values.keys()].find((key) => key.includes(':completed:')) ?? ''),
+      redis.values.has([...redis.values.keys()].find((key) => key.endsWith(':completed')) ?? ''),
     ).toBe(false)
     expect(requestA.lease.token).not.toBe(requestB.lease.token)
 
-    await coordinator.complete(requestB.lease)
+    await expect(coordinator.complete(requestB.lease)).resolves.toEqual({ state: 'completed' })
     expect(redis.values.has(lockKey)).toBe(false)
     expect([...redis.values.keys()]).toEqual([
-      expect.stringMatching(/^jakartabc:test:submission:completed:[a-f0-9]{64}$/),
+      expect.stringMatching(/^jakartabc:test:submission:\{[a-f0-9]{64}\}:completed$/),
     ])
   })
+
+  it.each([null, false, '', '1', 2, undefined])(
+    'fails closed when complete returns malformed Redis result %j',
+    async (malformed) => {
+      const redis = new FakeIdempotencyRedis()
+      const coordinator = createSubmissionCoordinator(
+        redis,
+        'jakartabc:test',
+        'test-payload-secret-that-is-at-least-32-chars',
+      )
+      const acquired = await coordinator.acquire('submission')
+      if (acquired.state !== 'acquired') throw new Error('expected acquired lease')
+      vi.spyOn(redis, 'eval').mockResolvedValueOnce(malformed as never)
+
+      await expect(coordinator.complete(acquired.lease)).rejects.toBeInstanceOf(
+        RedisUnavailableError,
+      )
+    },
+  )
 
   it('fails closed with RedisUnavailableError and no memory fallback', async () => {
     const redis = {

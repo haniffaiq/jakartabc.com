@@ -38,11 +38,14 @@ export type AcquireResult =
   | { state: 'in-progress' }
   | { state: 'completed' }
 
+export type CompleteResult = { state: 'completed' } | { state: 'lease-lost' }
+export type ReleaseResult = { state: 'released' } | { state: 'lease-lost' }
+
 export interface SubmissionCoordinator {
   rateLimit(scope: RateLimitScope, identity: string): Promise<RateLimitResult>
   acquire(submissionId: string): Promise<AcquireResult>
-  complete(lease: SubmissionLease): Promise<void>
-  release(lease: SubmissionLease): Promise<void>
+  complete(lease: SubmissionLease): Promise<CompleteResult>
+  release(lease: SubmissionLease): Promise<ReleaseResult>
 }
 
 interface IdempotencyRedis {
@@ -66,9 +69,9 @@ function toUnavailable(error: unknown): never {
   throw new RedisUnavailableError()
 }
 
-function assertMutationResult(result: unknown) {
-  const numericResult = Number(result)
-  if (numericResult !== 0 && numericResult !== 1) throw new RedisUnavailableError()
+function parseMutationResult(result: unknown): 0 | 1 {
+  if (result === 0 || result === 1) return result
+  throw new RedisUnavailableError()
 }
 
 export function createSubmissionCoordinator(
@@ -82,8 +85,8 @@ export function createSubmissionCoordinator(
   function keysFor(submissionId: string) {
     const digest = submissionDigest(submissionId, secret)
     return {
-      completed: `${namespace}:submission:completed:${digest}`,
-      lock: `${namespace}:submission:lock:${digest}`,
+      completed: `${namespace}:submission:{${digest}}:completed`,
+      lock: `${namespace}:submission:{${digest}}:lock`,
     }
   }
 
@@ -93,7 +96,9 @@ export function createSubmissionCoordinator(
       keys: [lock],
       arguments: [lease.token],
     })
-    assertMutationResult(result)
+    return parseMutationResult(result) === 1
+      ? ({ state: 'released' } as const)
+      : ({ state: 'lease-lost' } as const)
   }
 
   return {
@@ -133,7 +138,9 @@ export function createSubmissionCoordinator(
           keys: [lock, completed],
           arguments: [lease.token, String(COMPLETED_TTL_SECONDS)],
         })
-        assertMutationResult(result)
+        return parseMutationResult(result) === 1
+          ? ({ state: 'completed' } as const)
+          : ({ state: 'lease-lost' } as const)
       } catch (error) {
         toUnavailable(error)
       }
@@ -141,7 +148,7 @@ export function createSubmissionCoordinator(
 
     async release(lease) {
       try {
-        await releaseLease(lease)
+        return await releaseLease(lease)
       } catch (error) {
         toUnavailable(error)
       }
@@ -171,9 +178,9 @@ export const submissionCoordinator: SubmissionCoordinator = {
     return (await getEnvironmentCoordinator()).acquire(submissionId)
   },
   async complete(lease) {
-    await (await getEnvironmentCoordinator()).complete(lease)
+    return (await getEnvironmentCoordinator()).complete(lease)
   },
   async release(lease) {
-    await (await getEnvironmentCoordinator()).release(lease)
+    return (await getEnvironmentCoordinator()).release(lease)
   },
 }

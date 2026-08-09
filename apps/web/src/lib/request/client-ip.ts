@@ -28,7 +28,7 @@ function normalizeIp(value: string) {
   }
 }
 
-export function getTrustedClientIp(
+export function getClientIP(
   requestHeaders: HeaderReader,
   trustedProxySecret = process.env.TRUSTED_PROXY_SECRET ?? '',
 ): string {

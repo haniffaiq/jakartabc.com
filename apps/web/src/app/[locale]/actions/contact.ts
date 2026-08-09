@@ -8,6 +8,7 @@ import { ContactSales, ContactVisitor, sendEmail, subjects } from '@jakartabc/em
 import { rateLimiter } from '@/lib/anti-spam/rate-limit'
 import { verifyTurnstile } from '@/lib/anti-spam/turnstile'
 import { getPayloadClient } from '@/lib/payload'
+import { getClientIP } from '@/lib/request/client-ip'
 import { contactSchema } from '@/lib/validation/contact'
 
 export type SubmitResult =
@@ -28,17 +29,6 @@ function optionalCompany(company: string | undefined) {
   return trimmed ? trimmed : undefined
 }
 
-async function getTrustedClientIp() {
-  const requestHeaders = await headers()
-  const forwarded = requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim()
-  return (
-    forwarded ||
-    requestHeaders.get('cf-connecting-ip') ||
-    requestHeaders.get('x-real-ip') ||
-    'unknown'
-  )
-}
-
 export async function submitContact(formData: FormData, _ip?: string): Promise<SubmitResult> {
   const parsed = contactSchema.safeParse(Object.fromEntries(formData.entries()))
   if (!parsed.success) return { ok: false, code: 'validation' }
@@ -49,7 +39,7 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
   const salesEmail = process.env.SALES_EMAIL
   if (!salesEmail) return { ok: false, code: 'unknown' }
 
-  const ip = await getTrustedClientIp()
+  const ip = getClientIP(await headers())
 
   const captchaOk = await verifyTurnstile(data.turnstileToken, ip)
   if (!captchaOk) return { ok: false, code: 'captcha' }
