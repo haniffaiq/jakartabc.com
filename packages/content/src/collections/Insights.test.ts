@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { Insights } from './Insights'
 
@@ -12,13 +12,6 @@ type FieldLike = {
   unique?: boolean
   relationTo?: string | string[]
 }
-
-const originalEnv = { ...process.env }
-
-afterEach(() => {
-  process.env = { ...originalEnv }
-  vi.unstubAllGlobals()
-})
 
 describe('Insights collection', () => {
   it('has expected slug and fields', () => {
@@ -78,7 +71,7 @@ describe('Insights collection', () => {
       },
     }
 
-    const result = await hook?.({ data } as any)
+    const result = await hook?.({ data } as never)
 
     expect(result?.estReadTime).toBe(2)
   })
@@ -100,10 +93,7 @@ describe('Insights collection', () => {
   })
 
   it('invalidates old and new Insight dependencies after a relationship change', async () => {
-    process.env.NEXT_PUBLIC_SITE_URL = 'https://example.test'
-    process.env.REVALIDATE_SECRET = 'secret'
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
-    vi.stubGlobal('fetch', fetchMock)
+    const queue = vi.fn().mockResolvedValue({ id: 'job-1' })
     const hook = Insights.hooks?.afterChange?.[0]
     expect(hook).toBeTypeOf('function')
 
@@ -122,11 +112,11 @@ describe('Insights collection', () => {
         coverImage: 'media-old',
         regulationsCited: ['reg-old'],
       },
-      req: { payload: { logger: {} } },
+      req: { payload: { jobs: { queue }, logger: {} }, transactionID: 'transaction-1' },
     } as never)
 
-    const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)
-    expect(body.tags).toEqual(
+    const tags = queue.mock.calls[0]?.[0].input.tags as string[]
+    expect(tags).toEqual(
       expect.arrayContaining([
         'insights:en',
         'insight:en:new',

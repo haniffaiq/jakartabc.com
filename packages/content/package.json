@@ -10,6 +10,7 @@
     "./collections/*": "./src/collections/*.ts",
     "./globals/*": "./src/globals/*.ts",
     "./blocks/*": "./src/blocks/*.ts",
+    "./cache/*": "./src/cache/*.ts",
     "./hooks/*": "./src/hooks/*.ts",
     "./generated/payload-types": "./src/generated/payload-types.ts"
   },

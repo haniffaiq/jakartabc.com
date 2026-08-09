@@ -798,6 +798,9 @@ git commit -m "feat: coordinate abuse protection through Redis"
 - Modify/test: `packages/content/src/globals/Footer.ts`
 - Modify: `packages/content/src/globals/SiteSettings.ts`
 - Create: `packages/content/src/globals/SiteSettings.test.ts`
+- Create/test: `packages/content/src/cache/revalidateTask.ts`
+- Modify/test: `apps/web/src/payload.config.ts`
+- Modify: `packages/content/package.json` (cache subpath export only)
 
 - [ ] **Step 1: Test deterministic cache tags**
 
@@ -826,11 +829,24 @@ Use pure functions that accept minimal document identity and return sorted/dedup
 
 - [ ] **Step 4: Test change and delete hooks**
 
-Assert `makeRevalidateHook` receives `previousDoc` and posts both old/new route tags. Assert new `makeRevalidateDeleteHook` posts tags from the deleted document. Assert failed fetch is logged without changing mutation return values.
+Assert `makeRevalidateHook` receives `previousDoc` and queues both old/new route
+tags with the same Payload request. Assert new `makeRevalidateDeleteHook` queues
+tags from the deleted document. A queue failure logs a stable message and
+propagates so the mutation rolls back. The task owns outbound fetches and throws
+on timeout or any failed chunk so Payload retries it.
 
 - [ ] **Step 5: Implement hook factories and attach them**
 
 Attach `afterChange` and `afterDelete` to every public collection. Attach change hooks to NavMenu, Footer, and SiteSettings. Related author/category/regulation/media changes invalidate Insight list/detail dependents conservatively.
+
+The hooks enqueue a `revalidate-cache` Payload job with the same request so the
+job insert participates in the content mutation transaction. The job handler
+runs after commit, posts deterministic chunks of at most 100 canonical tags,
+uses a bounded request timeout, and throws on any failed chunk. Configure the
+dedicated queue with bounded autorun and bounded exponential retries. Keep
+legacy Insight/service/pricing tags until Tasks 13 and 15 migrate their
+consumers. Direct queue/run/cancel access is admin-only; mutation hooks use the
+trusted local API with their existing request transaction.
 
 - [ ] **Step 6: Remove custom Insight publication behavior**
 
@@ -838,12 +854,14 @@ Delete the custom `status` field from the collection config, change default colu
 
 - [ ] **Step 7: Verify and commit the content lane**
 
-Run: `pnpm --filter @jakartabc/content test && pnpm --filter @jakartabc/content typecheck`
+Run: `pnpm --filter @jakartabc/content test && pnpm --filter @jakartabc/content typecheck && pnpm --filter @jakartabc/web test src/payload.config.test.ts && pnpm --filter @jakartabc/web typecheck`
 
-Expected: all content tests/typecheck pass; hook tests cover create/update/delete/old slug.
+Expected: all content/config tests and typechecks pass; hook tests cover
+create/update/delete/old slug, the same transactional request is passed to the
+job queue, and the worker covers timeout/retry/chunk boundaries.
 
 ```bash
-git add packages/content/src/cache packages/content/src/hooks packages/content/src/collections packages/content/src/globals
+git add packages/content/src/cache packages/content/src/hooks packages/content/src/collections packages/content/src/globals packages/content/package.json apps/web/src/payload.config.ts apps/web/src/payload.config.test.ts docs/superpowers/plans/2026-08-09-stabilization-and-security-hardening.md
 git commit -m "fix: invalidate all affected CMS cache tags"
 ```
 
@@ -1230,6 +1248,9 @@ The up migration must:
    `media`, set the database default to `media`, and enforce the final generated
    schema without changing filenames or deleting local/MinIO objects;
 6. avoid table rewrites that hold long exclusive locks when a nullable/additive operation suffices.
+7. create the generated Payload Jobs Queue tables, enums, foreign keys, and
+   indexes required by the registered `revalidate-cache` task; runtime schema
+   push remains disabled.
 
 The down migration removes only the new additive fields/constraints and restores native status from retained custom columns. It never deletes MinIO or local media.
 
@@ -1245,7 +1266,8 @@ pnpm typecheck
 
 Expected: generation and typecheck exit 0; generated lead types include all
 delivery fields, Insight uses `_status`, and generated Media types include the
-storage `prefix` field.
+storage `prefix` field. Generated types and migration snapshots also include
+`payload-jobs` plus the `revalidate-cache` task input/output contract.
 
 - [ ] **Step 8: Rehearse migration round trip on a disposable restored database**
 
@@ -1253,7 +1275,10 @@ Run the configured migrate-up, assertions, migrate-down, and migrate-up
 sequence. Query row counts, statuses, and media prefixes before/after. Expected:
 counts unchanged; publication state equivalent; one unique submission
 constraint per lead table; every migrated media row has `prefix = 'media'`;
-and a new media row receives the `media` database default.
+and a new media row receives the `media` database default. Also enqueue one
+revalidation job inside a rolled-back transaction and assert it is absent,
+then enqueue/commit another job, assert it becomes visible, run the dedicated
+worker, and assert successful completion removes it.
 
 - [ ] **Step 9: Verify and commit the artifact barrier**
 

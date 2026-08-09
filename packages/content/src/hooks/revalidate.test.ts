@@ -1,163 +1,130 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { MAX_CACHE_TAG_LENGTH } from '../cache/tags'
 import {
+  REVALIDATE_CACHE_QUEUE,
+  REVALIDATE_CACHE_TASK_SLUG,
   makeGlobalRevalidateHook,
   makeRevalidateDeleteHook,
   makeRevalidateHook,
 } from './revalidate'
 
-const originalEnv = { ...process.env }
-
 const runPayloadHook = (hook: unknown, args: Record<string, unknown>) =>
   (hook as (payloadArgs: Record<string, unknown>) => Promise<unknown>)(args)
 
+const requestWithQueue = () => {
+  const queue = vi.fn().mockResolvedValue({ id: 'job-1' })
+  const logger = { error: vi.fn(), info: vi.fn(), warn: vi.fn() }
+  const req = {
+    payload: {
+      jobs: { queue },
+      logger,
+    },
+    transactionID: 'transaction-1',
+  }
+
+  return { logger, queue, req }
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('makeRevalidateHook', () => {
-  afterEach(() => {
-    process.env = { ...originalEnv }
-    vi.unstubAllGlobals()
-  })
-
-  it('POSTs to revalidate endpoint with tags + secret header', async () => {
-    process.env.NEXT_PUBLIC_SITE_URL = 'https://example.test'
-    process.env.REVALIDATE_SECRET = 'secret-xyz'
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
-    vi.stubGlobal('fetch', fetchMock)
-
-    const hook = makeRevalidateHook((doc) => [
-      'insights:list',
-      `insights:slug:${(doc as { slug: string }).slug}`,
-    ])
-    const result = await runPayloadHook(hook, { doc: { slug: 'hello' }, operation: 'update' })
-
-    expect(result).toEqual({ slug: 'hello' })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://example.test/api/revalidate',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({ 'x-revalidate-secret': 'secret-xyz' }),
-      }),
-    )
-    const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)
-    expect(body.tags).toEqual(['insights:list', 'insights:slug:hello'])
-  })
-
-  it('does not throw if endpoint returns non-200', async () => {
-    process.env.NEXT_PUBLIC_SITE_URL = 'https://example.test'
-    process.env.REVALIDATE_SECRET = 'secret-xyz'
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }))
-
-    const hook = makeRevalidateHook(() => ['x'])
-
-    await expect(runPayloadHook(hook, { doc: {}, operation: 'create' })).resolves.not.toThrow()
-  })
-
-  it('builds tags from both the changed and previous document', async () => {
-    process.env.NEXT_PUBLIC_SITE_URL = 'https://example.test'
-    process.env.REVALIDATE_SECRET = 'secret-xyz'
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+  it('queues old and new tags with the same transactional request', async () => {
+    const { queue, req } = requestWithQueue()
+    const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     const buildTags = vi.fn((doc: { slug: string }, previousDoc?: { slug: string }) => [
       `new:${doc.slug}`,
       `old:${previousDoc?.slug}`,
     ])
+    const doc = { slug: 'new' }
 
     const result = await runPayloadHook(makeRevalidateHook(buildTags), {
-      doc: { slug: 'new' },
+      doc,
       previousDoc: { slug: 'old' },
       operation: 'update',
+      req,
     })
 
-    expect(result).toEqual({ slug: 'new' })
-    expect(buildTags).toHaveBeenCalledWith({ slug: 'new' }, { slug: 'old' })
-    expect(JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)).toEqual({
-      tags: ['new:new', 'old:old'],
+    expect(result).toBe(doc)
+    expect(buildTags).toHaveBeenCalledWith(doc, { slug: 'old' })
+    expect(queue).toHaveBeenCalledWith({
+      input: { tags: ['new:new', 'old:old'] },
+      overrideAccess: true,
+      queue: REVALIDATE_CACHE_QUEUE,
+      req,
+      task: REVALIDATE_CACHE_TASK_SLUG,
     })
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('logs a stable fetch failure and returns the changed document', async () => {
-    process.env.NEXT_PUBLIC_SITE_URL = 'https://example.test'
-    process.env.REVALIDATE_SECRET = 'secret-xyz'
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('secret network detail')))
-    const error = vi.fn()
-    const doc = { slug: 'kept' }
+  it('canonicalizes and deduplicates tags before queueing', async () => {
+    const { queue, req } = requestWithQueue()
+    const longTag = `insight:en:${'x'.repeat(400)}`
 
-    const result = await runPayloadHook(
-      makeRevalidateHook(() => ['x']),
+    await runPayloadHook(
+      makeRevalidateHook(() => ['same', 'same', longTag]),
       {
-        doc,
-        req: { payload: { logger: { error } } },
+        doc: {},
+        req,
       },
     )
 
-    expect(result).toBe(doc)
-    expect(error).toHaveBeenCalledWith('Revalidate request failed')
+    const tags = queue.mock.calls[0]?.[0].input.tags as string[]
+    expect(tags).toHaveLength(2)
+    expect(tags[1]).toHaveLength(MAX_CACHE_TAG_LENGTH)
+  })
+
+  it('logs a stable queue failure and propagates it to roll back the mutation', async () => {
+    const { logger, queue, req } = requestWithQueue()
+    const failure = new Error('database unavailable: secret detail')
+    queue.mockRejectedValue(failure)
+
+    await expect(
+      runPayloadHook(
+        makeRevalidateHook(() => ['x']),
+        { doc: { slug: 'kept' }, req },
+      ),
+    ).rejects.toBe(failure)
+    expect(logger.error).toHaveBeenCalledWith('Failed to queue cache revalidation')
   })
 })
 
 describe('makeRevalidateDeleteHook', () => {
-  afterEach(() => {
-    process.env = { ...originalEnv }
-    vi.unstubAllGlobals()
-  })
-
-  it('posts tags built from the deleted document and returns it', async () => {
-    process.env.NEXT_PUBLIC_SITE_URL = 'https://example.test'
-    process.env.REVALIDATE_SECRET = 'secret-xyz'
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
-    vi.stubGlobal('fetch', fetchMock)
+  it('queues tags from the deleted document in the same transaction', async () => {
+    const { queue, req } = requestWithQueue()
     const deletedDoc = { slug: 'deleted' }
 
     const result = await runPayloadHook(
       makeRevalidateDeleteHook((doc: { slug: string }) => [`deleted:${doc.slug}`]),
-      { doc: deletedDoc },
+      { doc: deletedDoc, req },
     )
 
     expect(result).toBe(deletedDoc)
-    expect(JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string)).toEqual({
-      tags: ['deleted:deleted'],
-    })
+    expect(queue).toHaveBeenCalledWith(
+      expect.objectContaining({ input: { tags: ['deleted:deleted'] }, req }),
+    )
   })
 })
 
 describe('makeGlobalRevalidateHook', () => {
-  afterEach(() => {
-    process.env = { ...originalEnv }
-    vi.unstubAllGlobals()
-  })
+  it('queues global tags and returns the changed document', async () => {
+    const { queue, req } = requestWithQueue()
+    const doc = { brandName: 'Jakarta BC' }
 
-  it('posts tags to the secured revalidate endpoint', async () => {
-    process.env.NEXT_PUBLIC_SITE_URL = 'https://jakartabc.test'
-    process.env.REVALIDATE_SECRET = 'test-secret'
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await runPayloadHook(
-      makeGlobalRevalidateHook(() => ['site:nav']),
-      {},
-    )
-
-    expect(fetchMock).toHaveBeenCalledWith('https://jakartabc.test/api/revalidate', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-revalidate-secret': 'test-secret',
+    const result = await runPayloadHook(
+      makeGlobalRevalidateHook(() => ['site:en', 'site:id']),
+      {
+        doc,
+        req,
       },
-      body: JSON.stringify({ tags: ['site:nav'] }),
-    })
-  })
-
-  it('skips when revalidate env is not configured', async () => {
-    delete process.env.NEXT_PUBLIC_SITE_URL
-    delete process.env.REVALIDATE_SECRET
-    const fetchMock = vi.fn()
-    const warn = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-
-    await runPayloadHook(
-      makeGlobalRevalidateHook(() => ['site:nav']),
-      { req: { payload: { logger: { warn } } } },
     )
 
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Skipping revalidate'))
+    expect(result).toBe(doc)
+    expect(queue).toHaveBeenCalledWith(
+      expect.objectContaining({ input: { tags: ['site:en', 'site:id'] }, req }),
+    )
   })
 })

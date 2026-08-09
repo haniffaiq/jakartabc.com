@@ -94,3 +94,41 @@ describe('Payload MinIO storage', () => {
     }
   })
 })
+
+describe('Payload cache revalidation jobs', () => {
+  it('restricts direct job control to admins', async () => {
+    const payloadModule = await import('./payload.config')
+    const config = await payloadModule.default
+    const clientRequest = { req: { user: { role: 'client' } } } as never
+    const adminRequest = { req: { user: { role: 'admin' } } } as never
+
+    expect(config.jobs?.access?.queue?.(clientRequest)).toBe(false)
+    expect(config.jobs?.access?.run?.(clientRequest)).toBe(false)
+    expect(config.jobs?.access?.cancel?.(clientRequest)).toBe(false)
+    expect(config.jobs?.access?.queue?.(adminRequest)).toBe(true)
+    expect(config.jobs?.access?.run?.(adminRequest)).toBe(true)
+    expect(config.jobs?.access?.cancel?.(adminRequest)).toBe(true)
+  })
+
+  it('registers the retrying task with a bounded dedicated autorun queue', async () => {
+    const payloadModule = await import('./payload.config')
+    const config = await payloadModule.default
+    const task = config.jobs?.tasks?.find(({ slug }) => slug === 'revalidate-cache')
+
+    expect(task).toMatchObject({
+      retries: {
+        attempts: 3,
+        backoff: { delay: 1_000, type: 'exponential' },
+      },
+      slug: 'revalidate-cache',
+    })
+    expect(config.jobs?.autoRun).toEqual([
+      {
+        cron: '*/10 * * * * *',
+        disableScheduling: true,
+        limit: 10,
+        queue: 'cache-revalidation',
+      },
+    ])
+  })
+})
