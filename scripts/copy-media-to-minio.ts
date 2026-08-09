@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 
 export type MediaCopyEntry = {
   key: string
@@ -60,24 +60,29 @@ export function parseMediaCopyArgs(args: string[]) {
 }
 
 type S3CommandClient = {
-  send(command: HeadObjectCommand | GetObjectCommand | PutObjectCommand): Promise<unknown>
+  send(command: GetObjectCommand | PutObjectCommand): Promise<unknown>
 }
 
 async function sha256Body(body: unknown) {
   if (!body) throw new Error('MinIO returned an empty object body during verification.')
   const hash = createHash('sha256')
+  let size = 0
 
   if (
     typeof body === 'object' &&
     'transformToByteArray' in body &&
     typeof body.transformToByteArray === 'function'
   ) {
-    hash.update(await body.transformToByteArray())
-    return hash.digest('hex')
+    const bytes = await body.transformToByteArray()
+    hash.update(bytes)
+    return { sha256: hash.digest('hex'), size: bytes.byteLength }
   }
   if (typeof body === 'object' && Symbol.asyncIterator in body) {
-    for await (const chunk of body as AsyncIterable<Uint8Array>) hash.update(chunk)
-    return hash.digest('hex')
+    for await (const chunk of body as AsyncIterable<Uint8Array>) {
+      hash.update(chunk)
+      size += chunk.byteLength
+    }
+    return { sha256: hash.digest('hex'), size }
   }
 
   throw new Error('MinIO returned an unsupported object body during verification.')
@@ -104,31 +109,26 @@ export function createS3MediaObjectStore(
 
   return {
     inspectObject: async (key) => {
-      let head: { ContentLength?: number; Metadata?: Record<string, string> }
       try {
-        head = (await client.send(
-          new HeadObjectCommand({ Bucket: bucket, Key: key }),
-        )) as typeof head
+        const object = (await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))) as {
+          Body?: unknown
+        }
+        return await sha256Body(object.Body)
       } catch (error) {
         if (isNotFound(error)) return null
         throw error
       }
-
-      if (typeof head.ContentLength !== 'number') {
-        throw new Error(`MinIO did not return a content length for ${key}.`)
-      }
-      const metadataSha256 = head.Metadata?.sha256
-      if (metadataSha256) return { sha256: metadataSha256, size: head.ContentLength }
-
-      const object = (await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))) as {
-        Body?: unknown
-      }
-      return { sha256: await sha256Body(object.Body), size: head.ContentLength }
     },
     putObject: async (entry) => {
+      const snapshot = await readFile(entry.sourcePath)
+      const snapshotSha256 = createHash('sha256').update(snapshot).digest('hex')
+      if (snapshot.length !== entry.size || snapshotSha256 !== entry.sha256) {
+        throw new SourceMediaChangedError(entry.key)
+      }
+
       await client.send(
         new PutObjectCommand({
-          Body: createReadStream(entry.sourcePath),
+          Body: snapshot,
           Bucket: bucket,
           ContentLength: entry.size,
           Key: entry.key,
@@ -136,6 +136,13 @@ export function createS3MediaObjectStore(
         }),
       )
     },
+  }
+}
+
+class SourceMediaChangedError extends Error {
+  constructor(key: string) {
+    super(`Source media changed after planning: ${key}`)
+    this.name = 'SourceMediaChangedError'
   }
 }
 
@@ -299,7 +306,16 @@ export async function executeMediaCopy({
       continue
     }
 
-    await store.putObject(entry)
+    try {
+      await store.putObject(entry)
+    } catch (error) {
+      if (error instanceof SourceMediaChangedError) {
+        result.mismatched += 1
+        result.exitCode = 1
+        continue
+      }
+      throw error
+    }
     const uploaded = await store.inspectObject(entry.key)
     if (!uploaded) {
       result.missing += 1

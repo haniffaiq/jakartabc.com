@@ -1201,7 +1201,10 @@ The up migration must:
 2. add/check delivery-status enum or constraint with pending/sent/failed;
 3. backfill Insight native `_status` and version `version__status` from old custom status values;
 4. preserve old custom status columns and legacy media data;
-5. avoid table rewrites that hold long exclusive locks when a nullable/additive operation suffices.
+5. add the media `prefix` column, backfill every null/empty legacy value to
+   `media`, set the database default to `media`, and enforce the final generated
+   schema without changing filenames or deleting local/MinIO objects;
+6. avoid table rewrites that hold long exclusive locks when a nullable/additive operation suffices.
 
 The down migration removes only the new additive fields/constraints and restores native status from retained custom columns. It never deletes MinIO or local media.
 
@@ -1215,11 +1218,17 @@ pnpm --filter @jakartabc/web exec payload generate:importmap
 pnpm typecheck
 ```
 
-Expected: generation and typecheck exit 0; generated lead types include all delivery fields and Insight uses `_status`.
+Expected: generation and typecheck exit 0; generated lead types include all
+delivery fields, Insight uses `_status`, and generated Media types include the
+storage `prefix` field.
 
 - [ ] **Step 8: Rehearse migration round trip on a disposable restored database**
 
-Run the configured migrate-up, assertions, migrate-down, and migrate-up sequence. Query row counts and statuses before/after. Expected: counts unchanged; publication state equivalent; one unique submission constraint per lead table.
+Run the configured migrate-up, assertions, migrate-down, and migrate-up
+sequence. Query row counts, statuses, and media prefixes before/after. Expected:
+counts unchanged; publication state equivalent; one unique submission
+constraint per lead table; every migrated media row has `prefix = 'media'`;
+and a new media row receives the `media` database default.
 
 - [ ] **Step 9: Verify and commit the artifact barrier**
 

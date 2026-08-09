@@ -179,23 +179,28 @@ describe('local media to MinIO copy', () => {
     expect(() => parseMediaCopyArgs(['--unknown'])).toThrow(/unknown argument/i)
   })
 
-  it('uses HEAD metadata for a matching S3 object', async () => {
+  it('hashes remote bytes instead of trusting forged SHA-256 metadata', async () => {
     const sent: string[] = []
+    const body = Buffer.from('authoritative remote bytes')
     const store = createS3MediaObjectStore(
       {
         send: async (command) => {
           sent.push(command.constructor.name)
-          return { ContentLength: 42, Metadata: { sha256: 'abc123' } }
+          return {
+            Body: Readable.from([body]),
+            ContentLength: body.length,
+            Metadata: { sha256: 'abc123' },
+          }
         },
       },
       'jakartabc',
     )
 
     await expect(store.inspectObject('media/logo.png')).resolves.toEqual({
-      sha256: 'abc123',
-      size: 42,
+      sha256: createHash('sha256').update(body).digest('hex'),
+      size: body.length,
     })
-    expect(sent).toEqual(['HeadObjectCommand'])
+    expect(sent).toEqual(['GetObjectCommand'])
   })
 
   it('downloads and hashes an existing object when legacy metadata is absent', async () => {
@@ -205,9 +210,7 @@ describe('local media to MinIO copy', () => {
       {
         send: async (command) => {
           sent.push(command.constructor.name)
-          if (command.constructor.name === 'HeadObjectCommand')
-            return { ContentLength: body.length }
-          return { Body: Readable.from([body]) }
+          return { Body: Readable.from([body]), ContentLength: body.length }
         },
       },
       'jakartabc',
@@ -217,7 +220,7 @@ describe('local media to MinIO copy', () => {
       sha256: createHash('sha256').update(body).digest('hex'),
       size: body.length,
     })
-    expect(sent).toEqual(['HeadObjectCommand', 'GetObjectCommand'])
+    expect(sent).toEqual(['GetObjectCommand'])
   })
 
   it('uploads with explicit content length and SHA-256 metadata', async () => {
@@ -243,7 +246,50 @@ describe('local media to MinIO copy', () => {
       Key: 'media/logo.png',
       Metadata: { sha256: entry.sha256 },
     })
-    expect(uploadInput?.Body).toBeInstanceOf(Readable)
+    expect(uploadInput?.Body).toEqual(Buffer.from('logo'))
+  })
+
+  it('rejects a same-length source mutation before PUT despite forgeable metadata', async () => {
+    const source = await temporarySource()
+    const sourcePath = path.join(source, 'logo.png')
+    await writeFile(sourcePath, 'AAAA')
+    const [entry] = await planMediaCopy(source)
+    await writeFile(sourcePath, 'BBBB')
+    let remote: Buffer | null = null
+    let forgedMetadata: Record<string, string> | undefined
+    let writes = 0
+    const store = createS3MediaObjectStore(
+      {
+        send: async (command) => {
+          if (command.constructor.name === 'GetObjectCommand') {
+            if (!remote) {
+              throw Object.assign(new Error('missing'), { $metadata: { httpStatusCode: 404 } })
+            }
+            return {
+              Body: Readable.from([remote]),
+              ContentLength: remote.length,
+              Metadata: forgedMetadata,
+            }
+          }
+          if (command.constructor.name === 'PutObjectCommand') {
+            writes += 1
+            const chunks: Buffer[] = []
+            for await (const chunk of command.input.Body as AsyncIterable<Buffer>)
+              chunks.push(chunk)
+            remote = Buffer.concat(chunks)
+            forgedMetadata = command.input.Metadata as Record<string, string>
+            return {}
+          }
+          return { Body: Readable.from(remote ? [remote] : []) }
+        },
+      },
+      'jakartabc',
+    )
+
+    const result = await executeMediaCopy({ entries: [entry], store })
+
+    expect(result).toMatchObject({ copied: 0, exitCode: 1, mismatched: 1 })
+    expect(writes).toBe(0)
   })
 
   it('runs dry without writes and logs only keys plus aggregate counts', async () => {

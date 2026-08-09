@@ -54,10 +54,13 @@ describe('Payload MinIO storage', () => {
         prefix: 'media',
       }),
     ).toBe('https://media.example.test/jakartabc/media/brand%20logo.webp')
-    expect(
-      (generateMediaFileURL as (args: { filename: string; prefix?: string }) => string)({
-        filename: 'legacy.webp',
-      }),
-    ).toBe('https://media.example.test/jakartabc/media/legacy.webp')
+    for (const prefix of [undefined, null, '']) {
+      expect(
+        (generateMediaFileURL as (args: { filename: string; prefix?: null | string }) => string)({
+          filename: 'legacy.webp',
+          prefix,
+        }),
+      ).toBe('https://media.example.test/jakartabc/media/legacy.webp')
+    }
   })
 })

@@ -25,12 +25,13 @@ const dirname = path.dirname(filename)
 
 export function generateMediaFileURL({
   filename,
-  prefix = 'media',
+  prefix,
 }: {
   filename: string
-  prefix?: string
+  prefix?: null | string
 }) {
-  const key = [prefix, filename]
+  const normalizedPrefix = prefix?.trim() || 'media'
+  const key = [normalizedPrefix, filename]
     .filter((segment): segment is string => Boolean(segment))
     .flatMap((segment) => segment.split('/'))
     .filter(Boolean)
