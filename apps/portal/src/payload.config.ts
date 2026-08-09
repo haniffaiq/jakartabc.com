@@ -3,12 +3,13 @@ import { fileURLToPath } from 'node:url'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { buildConfig } from 'payload'
+import { env } from '@/env'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
 export default buildConfig({
-  serverURL: process.env.NEXT_PUBLIC_PORTAL_URL,
+  serverURL: env.NEXT_PUBLIC_PORTAL_URL,
   admin: { disable: true },
   collections: [
     {
@@ -32,7 +33,7 @@ export default buildConfig({
     },
   ],
   editor: lexicalEditor({}),
-  secret: process.env.PORTAL_PAYLOAD_SECRET!,
+  secret: env.PAYLOAD_SECRET,
   typescript: { outputFile: path.resolve(dirname, 'payload-types.ts') },
-  db: postgresAdapter({ pool: { connectionString: process.env.DATABASE_URL } }),
+  db: postgresAdapter({ pool: { connectionString: env.DATABASE_URL } }),
 })

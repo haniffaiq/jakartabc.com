@@ -80,7 +80,7 @@ services:
       dockerfile: apps/portal/Dockerfile
       args:
         DATABASE_URL: ${DATABASE_URL}
-        PORTAL_PAYLOAD_SECRET: ${PORTAL_PAYLOAD_SECRET}
+        PAYLOAD_SECRET: ${PAYLOAD_SECRET}
         PORTAL_COOKIE_DOMAIN: ${PORTAL_COOKIE_DOMAIN:-app.jakartabc.com}
         NEXT_PUBLIC_PORTAL_URL: ${NEXT_PUBLIC_PORTAL_URL}
     env_file: .env
@@ -90,7 +90,7 @@ services:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      PORTAL_PAYLOAD_SECRET: ${PORTAL_PAYLOAD_SECRET}
+      PAYLOAD_SECRET: ${PAYLOAD_SECRET}
       PORTAL_COOKIE_DOMAIN: ${PORTAL_COOKIE_DOMAIN}
       NEXT_PUBLIC_PORTAL_URL: ${NEXT_PUBLIC_PORTAL_URL}
     networks:
