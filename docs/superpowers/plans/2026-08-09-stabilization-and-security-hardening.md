@@ -534,21 +534,26 @@ git commit -m "feat: enforce shared Payload role access"
 - Modify: `packages/content/src/collections/Media.ts`
 - Modify: `packages/content/src/collections/Media.test.ts`
 - Modify: `apps/web/src/payload.config.ts`
+- Create: `apps/web/src/payload.config.test.ts`
+- Modify: `package.json`
+- Modify: `pnpm-lock.yaml`
 - Create: `scripts/copy-media-to-minio.ts`
 - Create: `scripts/copy-media-to-minio.test.ts`
 
 - [ ] **Step 1: Write failing media-policy tests**
 
-Assert the collection allows `image/jpeg`, `image/png`, `image/webp`, and `image/avif`; rejects `image/svg+xml`; limits bytes; and keeps editor-only writes with public reads.
+Assert the collection allows only `image/jpeg`, `image/png`, and `image/webp`;
+rejects AVIF/HEIF, JXL, ICNS, and SVG; rejects declared MIME/signature
+mismatches before Payload invokes `image-size`; caps buffered and temporary
+files at 5,000,000 bytes; and keeps editorial-only writes with public reads.
 
 ```ts
-expect(Media.upload?.mimeTypes).toEqual(['image/jpeg', 'image/png', 'image/webp', 'image/avif'])
-expect(Media.upload?.mimeTypes).not.toContain('image/svg+xml')
+expect(Media.upload?.mimeTypes).toEqual(['image/jpeg', 'image/png', 'image/webp'])
 ```
 
 - [ ] **Step 2: Run media tests and verify red**
 
-Run: `pnpm --filter @jakartabc/content test src/collections/Media.test.ts`
+Run: `pnpm --filter @jakartabc/content exec vitest run src/collections/Media.test.ts --maxWorkers=2`
 
 Expected: FAIL because the current collection does not match the approved type policy.
 
@@ -588,12 +593,18 @@ The command accepts `--source apps/web/uploads`, `--dry-run`, and `--verify-only
 
 - [ ] **Step 6: Verify and commit**
 
-Run: `pnpm --filter @jakartabc/content test src/collections/Media.test.ts && pnpm exec vitest run scripts/copy-media-to-minio.test.ts && pnpm --filter @jakartabc/web typecheck`
+Run the three focused commands sequentially:
+
+```bash
+pnpm --filter @jakartabc/content exec vitest run src/collections/Media.test.ts --maxWorkers=2
+apps/web/node_modules/.bin/vitest run scripts/copy-media-to-minio.test.ts --maxWorkers=2 --root .
+pnpm --filter @jakartabc/web typecheck
+```
 
 Expected: media, script, and type checks pass.
 
 ```bash
-git add packages/content/src/collections/Media.ts packages/content/src/collections/Media.test.ts apps/web/src/payload.config.ts scripts/copy-media-to-minio.ts scripts/copy-media-to-minio.test.ts
+git add packages/content/src/collections/Media.ts packages/content/src/collections/Media.test.ts apps/web/src/payload.config.ts apps/web/src/payload.config.test.ts scripts/copy-media-to-minio.ts scripts/copy-media-to-minio.test.ts package.json pnpm-lock.yaml docs/superpowers/specs/2026-08-09-stabilization-and-security-hardening-design.md docs/superpowers/plans/2026-08-09-stabilization-and-security-hardening.md
 git commit -m "feat: store public media in shared MinIO"
 ```
 

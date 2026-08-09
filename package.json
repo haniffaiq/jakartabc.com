@@ -14,6 +14,7 @@
     "build": "turbo run build --cache=local:rw",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint --cache=local:rw",
+    "media:copy": "pnpm --filter @jakartabc/web exec node --import tsx ../../scripts/copy-media-to-minio.ts",
     "typecheck": "turbo run typecheck --cache=local:rw",
     "test": "turbo run test --cache=local:rw",
     "test:e2e": "turbo run test:e2e --cache=local:rw",
@@ -21,6 +22,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,md,json,yml,yaml}\""
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "3.1106.0",
     "@lhci/cli": "0.15.1",
     "prettier": "3.3.3",
     "turbo": "2.10.9",

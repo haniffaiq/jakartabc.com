@@ -22,6 +22,9 @@ importers:
 
   .:
     devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: 3.1106.0
+        version: 3.1106.0
       '@lhci/cli':
         specifier: 0.15.1
         version: 0.15.1

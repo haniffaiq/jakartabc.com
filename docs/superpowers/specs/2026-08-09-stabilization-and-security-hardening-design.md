@@ -310,9 +310,11 @@ prefix. Browser media URLs are built from `MINIO_PUBLIC_URL` and point directly
 to MinIO or its existing public reverse-proxy endpoint; image bytes do not pass
 through the Node.js application.
 
-Accepted media types are JPEG, PNG, WebP, and AVIF. SVG is rejected because an
-editor-uploaded SVG can carry active content. Existing Payload file-size and
-image-dimension limits remain enforced and receive regression tests.
+Accepted media types are temporarily limited to JPEG, PNG, and WebP while the
+two approved `image-size` advisories remain open. AVIF/HEIF, JXL, ICNS, and SVG
+are rejected before Payload probes image dimensions. The server validates the
+actual magic bytes, requires the detected and declared MIME types to match, and
+enforces a 5,000,000-byte limit for both buffered and temporary files.
 
 The application no longer treats a local filesystem path or Docker upload
 volume as durable media storage. Legacy objects are copied to `media/`, then

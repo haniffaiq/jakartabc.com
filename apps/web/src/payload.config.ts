@@ -2,6 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
+import { s3Storage } from '@payloadcms/storage-s3'
 import { buildConfig } from 'payload'
 import {
   Authors,
@@ -21,6 +22,23 @@ import { env } from './env'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
+
+export function generateMediaFileURL({
+  filename,
+  prefix = 'media',
+}: {
+  filename: string
+  prefix?: string
+}) {
+  const key = [prefix, filename]
+    .filter((segment): segment is string => Boolean(segment))
+    .flatMap((segment) => segment.split('/'))
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join('/')
+
+  return `${env.MINIO_PUBLIC_URL.replace(/\/$/, '')}/${key}`
+}
 
 export default buildConfig({
   serverURL: env.NEXT_PUBLIC_SITE_URL,
@@ -43,6 +61,29 @@ export default buildConfig({
     Users,
   ],
   globals: [SiteSettings, NavMenu, Footer],
+  plugins: [
+    s3Storage({
+      alwaysInsertFields: true,
+      bucket: env.MINIO_BUCKET,
+      collections: {
+        media: {
+          disableLocalStorage: true,
+          generateFileURL: generateMediaFileURL,
+          prefix: 'media',
+        },
+      },
+      config: {
+        credentials: {
+          accessKeyId: env.MINIO_ACCESS_KEY,
+          secretAccessKey: env.MINIO_SECRET_KEY,
+        },
+        endpoint: env.MINIO_ENDPOINT,
+        forcePathStyle: env.MINIO_FORCE_PATH_STYLE,
+        region: env.MINIO_REGION,
+      },
+      disableLocalStorage: true,
+    }),
+  ],
   localization: {
     locales: ['en', 'id'],
     defaultLocale: 'en',
