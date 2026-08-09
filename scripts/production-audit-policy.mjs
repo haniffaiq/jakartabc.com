@@ -2,6 +2,7 @@ const approvedAdvisoryIds = ['GHSA-w3rx-r6r6-pgpr', 'GHSA-5p2g-fcmc-qvqq']
 const approvedAdvisorySet = new Set(approvedAdvisoryIds)
 const expectedExpiry = '2026-09-09'
 const expectedOwner = 'JakartaBC platform owner'
+const auditSeverities = ['info', 'low', 'moderate', 'high', 'critical']
 const expectedMitigationContract = {
   allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
   rejectedFormats: ['AVIF', 'HEIF', 'JXL', 'ICNS'],
@@ -92,23 +93,57 @@ export const validatePolicy = (policy) => {
   }
 }
 
-export const evaluateAuditReport = (report, policy, currentDate) => {
-  validatePolicy(policy)
-  if (!validDateOnly(currentDate)) throw new Error('current date must use YYYY-MM-DD')
-  if (!report?.advisories || typeof report.advisories !== 'object') {
+const validateAuditReport = (report) => {
+  if (
+    !report?.advisories ||
+    typeof report.advisories !== 'object' ||
+    Array.isArray(report.advisories)
+  ) {
     throw new Error('audit report must contain an advisories object')
   }
 
-  const advisories = Object.values(report.advisories)
-  const reportedCounts = report.metadata?.vulnerabilities
-  for (const severity of ['critical', 'high']) {
+  const counts = report.metadata?.vulnerabilities
+  for (const severity of auditSeverities) {
+    if (!Number.isInteger(counts?.[severity]) || counts[severity] < 0) {
+      throw new Error(`${severity} audit count must be a nonnegative integer`)
+    }
+  }
+
+  const advisories = Object.entries(report.advisories)
+  for (const [key, advisory] of advisories) {
     if (
-      typeof reportedCounts?.[severity] === 'number' &&
-      reportedCounts[severity] !== advisories.filter((item) => item.severity === severity).length
+      !advisory ||
+      typeof advisory.github_advisory_id !== 'string' ||
+      !/^GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/.test(advisory.github_advisory_id)
     ) {
+      throw new Error(`advisory ${key} must have a valid github_advisory_id`)
+    }
+    if (typeof advisory.module_name !== 'string' || advisory.module_name.trim() === '') {
+      throw new Error(`advisory ${key} must have a nonempty module_name`)
+    }
+    if (!auditSeverities.includes(advisory.severity)) {
+      throw new Error(`advisory ${key} must have a recognized severity`)
+    }
+    if (
+      approvedAdvisorySet.has(advisory.github_advisory_id) &&
+      advisory.module_name !== 'image-size'
+    ) {
+      throw new Error(`${advisory.github_advisory_id} must belong to image-size`)
+    }
+  }
+
+  for (const severity of auditSeverities) {
+    const detailedCount = advisories.filter(([, advisory]) => advisory.severity === severity).length
+    if (counts[severity] !== detailedCount) {
       throw new Error(`${severity} audit count does not match advisory details`)
     }
   }
+}
+
+export const evaluateAuditReport = (report, policy, currentDate) => {
+  validatePolicy(policy)
+  if (!validDateOnly(currentDate)) throw new Error('current date must use YYYY-MM-DD')
+  validateAuditReport(report)
 
   const exceptions = new Map(policy.exceptions.map((exception) => [exception.id, exception]))
   const allowed = []
