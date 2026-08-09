@@ -66,7 +66,7 @@ Visit:
 
 - `http://localhost:3000` — EN site
 - `http://localhost:3000/id` — ID site
-- `http://localhost:3000/admin` — Payload admin; first signup becomes admin
+- `http://localhost:3000/admin` — Payload admin; initial access requires the one-shot bootstrap command below
 
 ## Verification commands
 
@@ -181,7 +181,30 @@ nginx proxies them over TLS.
 
 ### 7. Create the first admin
 
-Visit `https://staging.jakartabc.com/admin` and create the initial admin account. Payload makes only the first signup the admin.
+Run this once, after migrations, against a database that does not already contain
+an admin. Never run bootstrap commands concurrently. The password must contain at
+least 16 characters, including uppercase, lowercase, a number, and a symbol.
+
+```bash
+read -rp 'Initial admin email: ' BOOTSTRAP_ADMIN_EMAIL
+read -rsp 'Initial admin password: ' BOOTSTRAP_ADMIN_PASSWORD
+printf '\n'
+export BOOTSTRAP_ADMIN_EMAIL BOOTSTRAP_ADMIN_PASSWORD
+docker compose run --rm \
+  -e BOOTSTRAP_ADMIN_EMAIL \
+  -e BOOTSTRAP_ADMIN_PASSWORD \
+  web-migrate pnpm --filter @jakartabc/web bootstrap:admin
+bootstrap_admin_status=$?
+unset BOOTSTRAP_ADMIN_EMAIL BOOTSTRAP_ADMIN_PASSWORD
+test "$bootstrap_admin_status" -eq 0
+unset bootstrap_admin_status
+```
+
+The command refuses to run if any admin exists and never promotes an existing
+account. Do not add either bootstrap variable to `.env`, Compose, shell history,
+or shared runtime configuration. Unset both immediately even when the command
+fails. After success, sign in at `https://staging.jakartabc.com/admin`; all later
+users and roles are managed there by an admin.
 
 ## Deploy update
 
