@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Stage 1: deps ----
-FROM node:20.18.0-alpine AS deps
+FROM node:20.18.1-alpine AS deps
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 
@@ -10,13 +10,14 @@ WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY packages/config/package.json packages/config/package.json
 COPY packages/ui/package.json packages/ui/package.json
+COPY packages/content/package.json packages/content/package.json
 COPY apps/portal/package.json apps/portal/package.json
 
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 
 # ---- Stage 2: build ----
-FROM node:20.18.0-alpine AS builder
+FROM node:20.18.1-alpine AS builder
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 
@@ -24,6 +25,7 @@ WORKDIR /repo
 COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/packages/config/node_modules ./packages/config/node_modules
 COPY --from=deps /repo/packages/ui/node_modules ./packages/ui/node_modules
+COPY --from=deps /repo/packages/content/node_modules ./packages/content/node_modules
 COPY --from=deps /repo/apps/portal/node_modules ./apps/portal/node_modules
 COPY . .
 
@@ -43,7 +45,7 @@ RUN mkdir -p apps/portal/public
 RUN pnpm --filter @jakartabc/portal build
 
 # ---- Stage 3: runtime ----
-FROM node:20.18.0-alpine AS runner
+FROM node:20.18.1-alpine AS runner
 RUN apk add --no-cache libc6-compat tini
 WORKDIR /app
 

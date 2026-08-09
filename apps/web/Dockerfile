@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # ---- Stage 1: deps ----
-FROM node:20.18.0-alpine AS deps
+FROM node:20.18.1-alpine AS deps
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 
@@ -18,7 +18,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
 
 # ---- Stage 2: build ----
-FROM node:20.18.0-alpine AS builder
+FROM node:20.18.1-alpine AS builder
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@9.12.3 --activate
 
@@ -64,7 +64,7 @@ ENV DATABASE_URL=$DATABASE_URL \
 RUN pnpm --filter @jakartabc/web build
 
 # ---- Stage 3: runtime ----
-FROM node:20.18.0-alpine AS runner
+FROM node:20.18.1-alpine AS runner
 RUN apk add --no-cache libc6-compat tini
 WORKDIR /app
 
