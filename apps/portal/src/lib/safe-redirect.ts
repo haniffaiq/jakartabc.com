@@ -28,6 +28,10 @@ export function safeNextPath(value: string | null | undefined) {
   try {
     const target = new URL(decoded, PORTAL_ORIGIN)
     if (target.origin !== PORTAL_ORIGIN) return DEFAULT_NEXT_PATH
+    if (UNSAFE_CHARACTER.test(target.pathname)) return DEFAULT_NEXT_PATH
+    if (!target.pathname.startsWith('/') || target.pathname.startsWith('//')) {
+      return DEFAULT_NEXT_PATH
+    }
 
     return `${target.pathname}${target.search}${target.hash}`
   } catch {
