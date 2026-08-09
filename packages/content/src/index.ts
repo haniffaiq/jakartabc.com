@@ -9,4 +9,13 @@ export { Regulations } from './collections/Regulations'
 export { Services } from './collections/Services'
 export { ContactMessages } from './collections/ContactMessages'
 export { BookingLeads } from './collections/BookingLeads'
+export { Users } from './collections/Users'
+export {
+  adminOnly,
+  canAccessAdmin,
+  clientOnly,
+  editorialOnly,
+  publishedOrEditorial,
+  type Role,
+} from './access/roles'
 export * from './generated/payload-types'

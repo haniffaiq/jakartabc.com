@@ -18,17 +18,23 @@ describe('ContactMessages collection', () => {
     )
   })
 
-  it('allows public create and requires an authenticated admin user for staff actions', () => {
+  it('denies direct create and restricts staff actions to admins', () => {
     const access = ContactMessages.access!
 
-    expect(access.create?.({ req: {} } as never)).toBe(true)
+    expect(access.create?.({ req: {} } as never)).toBe(false)
     expect(access.read?.({ req: {} } as never)).toBe(false)
     expect(access.update?.({ req: {} } as never)).toBe(false)
     expect(access.delete?.({ req: {} } as never)).toBe(false)
 
-    expect(access.read?.({ req: { user: { id: 'admin' } } } as never)).toBe(true)
-    expect(access.update?.({ req: { user: { id: 'admin' } } } as never)).toBe(true)
-    expect(access.delete?.({ req: { user: { id: 'admin' } } } as never)).toBe(true)
+    expect(access.read?.({ req: { user: { role: 'admin' } } } as never)).toBe(true)
+    expect(access.update?.({ req: { user: { role: 'admin' } } } as never)).toBe(true)
+    expect(access.delete?.({ req: { user: { role: 'admin' } } } as never)).toBe(true)
+
+    for (const role of ['editor', 'client']) {
+      expect(access.read?.({ req: { user: { role } } } as never)).toBe(false)
+      expect(access.update?.({ req: { user: { role } } } as never)).toBe(false)
+      expect(access.delete?.({ req: { user: { role } } } as never)).toBe(false)
+    }
   })
 
   it('indexes email and tracks lead status defaults', () => {

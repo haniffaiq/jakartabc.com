@@ -1,5 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
+import { adminOnly } from '../access/roles'
+
 export const BookingLeads: CollectionConfig = {
   slug: 'booking-leads',
   admin: {
@@ -9,10 +11,10 @@ export const BookingLeads: CollectionConfig = {
     listSearchableFields: ['name', 'email', 'company'],
   },
   access: {
-    create: () => true,
-    read: ({ req }) => Boolean(req.user),
-    update: ({ req }) => Boolean(req.user),
-    delete: ({ req }) => Boolean(req.user),
+    create: () => false,
+    read: adminOnly,
+    update: adminOnly,
+    delete: adminOnly,
   },
   fields: [
     { name: 'name', type: 'text', required: true },

@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 
-const requireAuthenticatedUser = ({ req }: { req: { user?: unknown } }) => Boolean(req.user)
+import { adminOnly } from '../access/roles'
 
 export const ContactMessages: CollectionConfig = {
   slug: 'contact-messages',
@@ -10,10 +10,10 @@ export const ContactMessages: CollectionConfig = {
     defaultColumns: ['createdAt', 'name', 'company', 'status'],
   },
   access: {
-    create: () => true,
-    read: requireAuthenticatedUser,
-    update: requireAuthenticatedUser,
-    delete: requireAuthenticatedUser,
+    create: () => false,
+    read: adminOnly,
+    update: adminOnly,
+    delete: adminOnly,
   },
   fields: [
     { name: 'name', type: 'text', required: true },

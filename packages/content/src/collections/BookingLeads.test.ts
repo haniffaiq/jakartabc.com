@@ -33,17 +33,21 @@ describe('BookingLeads collection', () => {
     })
   })
 
-  it('allows public create and restricts read/update/delete to authenticated admin users', () => {
+  it('denies direct create and restricts read/update/delete to admins', () => {
     const access = BookingLeads.access!
     const anonymousRequest = { req: { user: undefined } } as any
-    const adminRequest = { req: { user: { collection: 'users' } } } as any
+    const adminRequest = { req: { user: { role: 'admin' } } } as any
+    const editorRequest = { req: { user: { role: 'editor' } } } as any
 
-    expect(access.create!(anonymousRequest)).toBe(true)
+    expect(access.create!(anonymousRequest)).toBe(false)
     expect(access.read!(anonymousRequest)).toBe(false)
     expect(access.update!(anonymousRequest)).toBe(false)
     expect(access.delete!(anonymousRequest)).toBe(false)
     expect(access.read!(adminRequest)).toBe(true)
     expect(access.update!(adminRequest)).toBe(true)
     expect(access.delete!(adminRequest)).toBe(true)
+    expect(access.read!(editorRequest)).toBe(false)
+    expect(access.update!(editorRequest)).toBe(false)
+    expect(access.delete!(editorRequest)).toBe(false)
   })
 })

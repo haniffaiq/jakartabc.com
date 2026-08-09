@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { Categories } from './Categories'
 
+const request = (role?: 'admin' | 'editor' | 'client') => ({
+  req: { user: role ? { role } : null },
+})
+
 describe('Categories collection', () => {
   it('has slug + localized name', () => {
     expect(Categories.slug).toBe('categories')
@@ -9,5 +13,15 @@ describe('Categories collection', () => {
     const name = Categories.fields.find((field) => 'name' in field && field.name === 'name')
 
     expect(name && 'localized' in name && name.localized).toBe(true)
+  })
+
+  it('allows published reads and restricts mutations to editorial roles', () => {
+    const access = Categories.access!
+
+    expect(access.read?.(request() as never)).toEqual({ _status: { equals: 'published' } })
+    expect(access.read?.(request('editor') as never)).toBe(true)
+    expect(access.create?.(request('editor') as never)).toBe(true)
+    expect(access.update?.(request('admin') as never)).toBe(true)
+    expect(access.delete?.(request('client') as never)).toBe(false)
   })
 })

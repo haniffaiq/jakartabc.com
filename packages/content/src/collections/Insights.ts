@@ -9,6 +9,7 @@ import type { CollectionConfig } from 'payload'
 import { dropCap } from '../blocks/dropCap'
 import { pullQuote } from '../blocks/pullQuote'
 import { regulationCite } from '../blocks/regulationCite'
+import { editorialOnly, publishedOrEditorial } from '../access/roles'
 import { calcReadTime } from '../hooks/readTime'
 
 export const Insights: CollectionConfig = {
@@ -19,11 +20,10 @@ export const Insights: CollectionConfig = {
     defaultColumns: ['title', 'status', 'publishedAt', 'category'],
   },
   access: {
-    read: ({ req }) => {
-      if (req.user) return true
-
-      return { status: { equals: 'published' } }
-    },
+    create: editorialOnly,
+    read: publishedOrEditorial,
+    update: editorialOnly,
+    delete: editorialOnly,
   },
   versions: { drafts: true },
   fields: [

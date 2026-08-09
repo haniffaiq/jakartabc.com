@@ -1,9 +1,16 @@
 import type { CollectionConfig } from 'payload'
 
+import { editorialOnly } from '../access/roles'
+
 export const Media: CollectionConfig = {
   slug: 'media',
   admin: { group: 'Editorial' },
-  access: { read: () => true },
+  access: {
+    create: editorialOnly,
+    read: () => true,
+    update: editorialOnly,
+    delete: editorialOnly,
+  },
   upload: {
     staticDir: 'uploads',
     mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/svg+xml'],

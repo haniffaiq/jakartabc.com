@@ -15,6 +15,7 @@ import {
   Regulations,
   Services,
   SiteSettings,
+  Users,
 } from '@jakartabc/content'
 import { env } from './env'
 
@@ -24,7 +25,7 @@ const dirname = path.dirname(filename)
 export default buildConfig({
   serverURL: env.NEXT_PUBLIC_SITE_URL,
   admin: {
-    user: 'users',
+    user: Users.slug,
     meta: {
       titleSuffix: ' · Jakarta BC Admin',
     },
@@ -39,25 +40,7 @@ export default buildConfig({
     Services,
     ContactMessages,
     BookingLeads,
-    {
-      slug: 'users',
-      auth: {
-        tokenExpiration: 60 * 60 * 24 * 14,
-        maxLoginAttempts: 5,
-        lockTime: 10 * 60 * 1000,
-        useAPIKey: false,
-      },
-      admin: { useAsTitle: 'email' },
-      fields: [
-        { name: 'name', type: 'text' },
-        {
-          name: 'role',
-          type: 'select',
-          defaultValue: 'client',
-          options: ['admin', 'editor', 'client'],
-        },
-      ],
-    },
+    Users,
   ],
   globals: [SiteSettings, NavMenu, Footer],
   localization: {

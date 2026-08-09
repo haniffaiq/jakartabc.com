@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 
 import { Insights } from './Insights'
 
+const request = (role?: 'admin' | 'editor' | 'client') => ({
+  req: { user: role ? { role } : null },
+})
+
 type FieldLike = {
   name?: string
   localized?: boolean
@@ -69,5 +73,16 @@ describe('Insights collection', () => {
     const result = await hook?.({ data } as any)
 
     expect(result?.estReadTime).toBe(2)
+  })
+
+  it('allows published reads and restricts mutations to editorial roles', () => {
+    const access = Insights.access!
+
+    expect(access.read?.(request() as never)).toEqual({ _status: { equals: 'published' } })
+    expect(access.read?.(request('client') as never)).toEqual({ _status: { equals: 'published' } })
+    expect(access.read?.(request('editor') as never)).toBe(true)
+    expect(access.create?.(request('editor') as never)).toBe(true)
+    expect(access.update?.(request('admin') as never)).toBe(true)
+    expect(access.delete?.(request('client') as never)).toBe(false)
   })
 })

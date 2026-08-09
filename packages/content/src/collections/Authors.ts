@@ -1,5 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
+import { editorialOnly, publishedOrEditorial } from '../access/roles'
+
 export const Authors: CollectionConfig = {
   slug: 'authors',
   admin: {
@@ -7,7 +9,12 @@ export const Authors: CollectionConfig = {
     useAsTitle: 'name',
     defaultColumns: ['name', 'role', 'email'],
   },
-  access: { read: () => true },
+  access: {
+    create: editorialOnly,
+    read: publishedOrEditorial,
+    update: editorialOnly,
+    delete: editorialOnly,
+  },
   fields: [
     { name: 'name', type: 'text', required: true },
     { name: 'role', type: 'text', required: true, localized: true },
