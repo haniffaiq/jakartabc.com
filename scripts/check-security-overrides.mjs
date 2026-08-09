@@ -16,6 +16,7 @@ const expectedOverrides = {
   'nanoid@3': '3.3.17',
   'monaco-editor@0.55.1>dompurify': '3.4.13',
   'next@16.2.11>postcss': '8.5.23',
+  'next@16.2.11>sharp': '0.35.0',
   'payload@3.86.0>undici': '7.29.0',
 }
 
@@ -73,7 +74,7 @@ for (const requiredLine of [
     fail(`apps/portal/Dockerfile missing: ${requiredLine}`)
 }
 
-if (webManifest.dependencies?.sharp !== '0.34.5') fail('apps/web sharp must be exactly 0.34.5')
+if (webManifest.dependencies?.sharp !== '0.35.0') fail('apps/web sharp must be exactly 0.35.0')
 
 const actualOverrides = rootManifest.pnpm?.overrides ?? {}
 for (const [selector, version] of Object.entries(expectedOverrides)) {
@@ -101,11 +102,35 @@ if (!atLeast(process.versions.node, expectedNodeVersion)) {
 
 const requireFromWeb = createRequire(resolve(repositoryRoot, 'apps/web/package.json'))
 const sharpPackage = await readResolvedPackage(requireFromWeb, 'sharp')
-if (sharpPackage.version !== '0.34.5')
-  fail(`resolved sharp must be 0.34.5; found ${sharpPackage.version}`)
+if (sharpPackage.version !== '0.35.0')
+  fail(`web must resolve sharp 0.35.0; found ${sharpPackage.version}`)
+
+const requireFromNext = createRequire(requireFromWeb.resolve('next'))
+const nextSharpPackage = await readResolvedPackage(requireFromNext, 'sharp')
+if (nextSharpPackage.version !== '0.35.0') {
+  fail(`Next 16.2.11 must resolve sharp 0.35.0; found ${nextSharpPackage.version}`)
+}
+
 const sharp = requireFromWeb('sharp')
 const metadata = await sharp(Buffer.from('<svg width="1" height="1"></svg>')).metadata()
 if (metadata.width !== 1 || metadata.height !== 1) fail('sharp metadata smoke did not return 1x1')
+
+const rawImage = Buffer.from([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255])
+for (const format of ['png', 'webp']) {
+  const output = await sharp(rawImage, { raw: { width: 2, height: 2, channels: 4 } })
+    .resize(1, 1)
+    [format]()
+    .toBuffer()
+  const outputMetadata = await sharp(output).metadata()
+  if (
+    output.length === 0 ||
+    outputMetadata.format !== format ||
+    outputMetadata.width !== 1 ||
+    outputMetadata.height !== 1
+  ) {
+    fail(`sharp ${format} resize smoke did not return a non-empty 1x1 ${format} image`)
+  }
+}
 
 const payloadEntryPath = requireFromWeb.resolve('payload')
 const requireFromPayload = createRequire(payloadEntryPath)
