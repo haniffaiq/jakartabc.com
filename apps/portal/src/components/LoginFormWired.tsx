@@ -6,14 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Button, Input } from '@jakartabc/ui'
 
 import { loginAction, type LoginResult } from '@/lib/auth'
-
-function safeNextPath(value: string | null) {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) {
-    return '/dashboard'
-  }
-
-  return value
-}
+import { safeNextPath } from '@/lib/safe-redirect'
 
 export function LoginFormWired() {
   const router = useRouter()
@@ -27,7 +20,7 @@ export function LoginFormWired() {
 
   React.useEffect(() => {
     if (state?.ok) {
-      router.push(next)
+      router.replace(next)
     }
   }, [state, router, next])
 
@@ -36,7 +29,13 @@ export function LoginFormWired() {
   return (
     <form action={formAction} className="flex flex-col gap-8">
       <Input name="email" type="email" label="Email" required autoComplete="email" />
-      <Input name="password" type="password" label="Password" required autoComplete="current-password" />
+      <Input
+        name="password"
+        type="password"
+        label="Password"
+        required
+        autoComplete="current-password"
+      />
 
       {errorMessage ? (
         <p role="alert" className="text-body-sm text-danger">
@@ -58,6 +57,10 @@ function getLoginErrorMessage(error: Exclude<LoginResult, { ok: true }>['error']
 
   if (error === 'validation') {
     return 'Please enter a valid email and password.'
+  }
+
+  if (error === 'forbidden') {
+    return 'This account is not authorized for the client portal.'
   }
 
   return 'Something went wrong. Try again.'

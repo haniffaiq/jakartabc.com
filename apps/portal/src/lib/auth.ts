@@ -8,7 +8,9 @@ import { getPayloadClient } from '@/lib/payload'
 const COOKIE_NAME = 'jbc_portal_session'
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14
 
-export type LoginResult = { ok: true } | { ok: false; error: 'validation' | 'invalid' | 'server' }
+export type LoginResult =
+  | { ok: true }
+  | { ok: false; error: 'validation' | 'invalid' | 'forbidden' | 'server' }
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -48,6 +50,7 @@ export async function loginAction(
     const result = await payload.login({ collection: 'users', data: parsed.data })
 
     if (!result.token) return { ok: false, error: 'invalid' }
+    if (result.user?.role !== 'client') return { ok: false, error: 'forbidden' }
 
     const jar = await cookies()
     jar.set(sessionCookie(result.token))
@@ -81,7 +84,7 @@ export async function getCurrentUser() {
     authHeaders.set('cookie', `${COOKIE_NAME}=${cookie.value}`)
 
     const result = await payload.auth({ headers: authHeaders })
-    return result.user ?? null
+    return result.user?.role === 'client' ? result.user : null
   } catch {
     return null
   }

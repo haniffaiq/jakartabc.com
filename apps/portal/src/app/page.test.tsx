@@ -24,7 +24,7 @@ describe('PortalRoot', () => {
   })
 
   it('redirects authenticated users to the dashboard', async () => {
-    getCurrentUserMock.mockResolvedValue({ id: 1, email: 'client@jakartabc.com' })
+    getCurrentUserMock.mockResolvedValue({ id: 1, email: 'client@jakartabc.com', role: 'client' })
 
     await expect(PortalRoot()).rejects.toThrow('redirect:/dashboard')
     expect(getCurrentUserMock).toHaveBeenCalledOnce()
@@ -38,4 +38,15 @@ describe('PortalRoot', () => {
     expect(getCurrentUserMock).toHaveBeenCalledOnce()
     expect(redirectMock).toHaveBeenCalledWith('/login')
   })
+
+  it.each(['admin', 'editor'])(
+    'does not route an authenticated %s user to dashboard',
+    async (role) => {
+      getCurrentUserMock.mockResolvedValue({ id: 1, email: `${role}@jakartabc.com`, role })
+
+      await expect(PortalRoot()).rejects.toThrow('redirect:/login')
+      expect(redirectMock).toHaveBeenCalledWith('/login')
+      expect(redirectMock).not.toHaveBeenCalledWith('/dashboard')
+    },
+  )
 })

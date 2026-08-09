@@ -38,7 +38,7 @@ describe('auth Server Actions', () => {
   })
 
   it('sets a secure portal cookie when login succeeds', async () => {
-    loginMock.mockResolvedValue({ user: { id: 1, email: 'u@x.co' }, token: 'tok' })
+    loginMock.mockResolvedValue({ user: { id: 1, email: 'u@x.co', role: 'client' }, token: 'tok' })
     const formData = new FormData()
     formData.set('email', 'U@X.CO')
     formData.set('password', 'pw')
@@ -61,6 +61,16 @@ describe('auth Server Actions', () => {
         domain: 'app.jakartabc.com',
       }),
     )
+  })
+
+  it.each(['admin', 'editor'])('forbids %s login without writing a portal cookie', async (role) => {
+    loginMock.mockResolvedValue({ user: { id: 1, email: `${role}@x.co`, role }, token: 'tok' })
+    const formData = new FormData()
+    formData.set('email', `${role}@x.co`)
+    formData.set('password', 'pw')
+
+    await expect(loginAction(null, formData)).resolves.toEqual({ ok: false, error: 'forbidden' })
+    expect(cookieStoreSet).not.toHaveBeenCalled()
   })
 
   it('returns invalid when Payload rejects credentials', async () => {
@@ -114,7 +124,7 @@ describe('auth Server Actions', () => {
   })
 
   it('forwards the portal token to Payload auth when present', async () => {
-    const user = { id: 1, email: 'u@x.co' }
+    const user = { id: 1, email: 'u@x.co', role: 'client' }
     cookieStoreGet.mockReturnValue({ name: 'jbc_portal_session', value: 'tok' })
     authMock.mockResolvedValue({ user })
 
@@ -124,5 +134,12 @@ describe('auth Server Actions', () => {
     expect(call).toBeDefined()
     expect(call?.headers.get('authorization')).toBe('JWT tok')
     expect(call?.headers.get('cookie')).toBe('jbc_portal_session=tok')
+  })
+
+  it.each(['admin', 'editor'])('returns null for an authenticated %s user', async (role) => {
+    cookieStoreGet.mockReturnValue({ name: 'jbc_portal_session', value: 'tok' })
+    authMock.mockResolvedValue({ user: { id: 1, email: `${role}@x.co`, role } })
+
+    await expect(getCurrentUser()).resolves.toBeNull()
   })
 })
