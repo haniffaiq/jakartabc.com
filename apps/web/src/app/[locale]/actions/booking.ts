@@ -9,14 +9,24 @@ import { sendEmail } from '@jakartabc/email/send'
 import { BookingLeadSales } from '@jakartabc/email/templates/BookingLeadSales'
 import { BookingLeadVisitor } from '@jakartabc/email/templates/BookingLeadVisitor'
 
-import { checkRateLimit } from '@/lib/anti-spam/rate-limit'
+import { rateLimiter } from '@/lib/anti-spam/rate-limit'
 import { verifyTurnstile } from '@/lib/anti-spam/turnstile'
 import { getPayloadClient } from '@/lib/payload'
 import { bookingSchema } from '@/lib/validation/booking'
 
 export type SubmitBookingResult =
   | { ok: true }
-  | { ok: false; code: 'validation' | 'captcha' | 'rate' | 'service-unknown' | 'persistence' | 'unknown' }
+  | {
+      ok: false
+      code:
+        | 'validation'
+        | 'captcha'
+        | 'rate'
+        | 'service-unknown'
+        | 'persistence'
+        | 'temporarily-unavailable'
+        | 'unknown'
+    }
 
 type ServiceDoc = {
   id: string | number
@@ -100,7 +110,12 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   const captchaOk = await verifyTurnstile(data.turnstileToken, ip)
   if (!captchaOk) return { ok: false, code: 'captcha' }
 
-  const rateLimit = checkRateLimit(`${ip}:${data.email}`)
+  let rateLimit
+  try {
+    rateLimit = await rateLimiter.rateLimit('booking', `${ip}:${data.email}`)
+  } catch {
+    return { ok: false, code: 'temporarily-unavailable' }
+  }
   if (!rateLimit.allowed) return { ok: false, code: 'rate' }
 
   const payload = (await getPayloadClient()) as unknown as PayloadBookingClient

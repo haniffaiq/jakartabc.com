@@ -94,11 +94,3 @@ export const rateLimiter: RateLimiter = {
     )
   },
 }
-
-/**
- * Temporary compatibility boundary for legacy actions. It intentionally fails
- * closed until those actions migrate to the async coordinator.
- */
-export function checkRateLimit(_identity: string): RateLimitResult {
-  return { allowed: false, retryAfter: WINDOW_SECONDS }
-}

@@ -19,13 +19,30 @@ end
 return 0
 `
 
-type AcquireResult = 'acquired' | 'in-progress' | 'completed'
+const COMPLETE_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+  return 0
+end
+redis.call('SET', KEYS[2], '1', 'EX', ARGV[2])
+redis.call('DEL', KEYS[1])
+return 1
+`
+
+export type SubmissionLease = Readonly<{
+  submissionId: string
+  token: string
+}>
+
+export type AcquireResult =
+  | { state: 'acquired'; lease: SubmissionLease }
+  | { state: 'in-progress' }
+  | { state: 'completed' }
 
 export interface SubmissionCoordinator {
   rateLimit(scope: RateLimitScope, identity: string): Promise<RateLimitResult>
   acquire(submissionId: string): Promise<AcquireResult>
-  complete(submissionId: string): Promise<void>
-  release(submissionId: string): Promise<void>
+  complete(lease: SubmissionLease): Promise<void>
+  release(lease: SubmissionLease): Promise<void>
 }
 
 interface IdempotencyRedis {
@@ -49,78 +66,82 @@ function toUnavailable(error: unknown): never {
   throw new RedisUnavailableError()
 }
 
+function assertMutationResult(result: unknown) {
+  const numericResult = Number(result)
+  if (numericResult !== 0 && numericResult !== 1) throw new RedisUnavailableError()
+}
+
 export function createSubmissionCoordinator(
   redis: CoordinatorRedis,
   prefix: string,
   secret: string,
 ): SubmissionCoordinator {
   const rateLimiter: RateLimiter = createRateLimiter(redis, prefix, secret)
-  const tokensByDigest = new Map<string, string>()
   const namespace = namespacedPrefix(prefix)
 
   function keysFor(submissionId: string) {
     const digest = submissionDigest(submissionId, secret)
     return {
       completed: `${namespace}:submission:completed:${digest}`,
-      digest,
       lock: `${namespace}:submission:lock:${digest}`,
     }
   }
 
-  async function releaseToken(digest: string, lock: string, token: string) {
-    await redis.eval(RELEASE_LOCK_SCRIPT, {
+  async function releaseLease(lease: SubmissionLease) {
+    const { lock } = keysFor(lease.submissionId)
+    const result = await redis.eval(RELEASE_LOCK_SCRIPT, {
       keys: [lock],
-      arguments: [token],
+      arguments: [lease.token],
     })
-    tokensByDigest.delete(digest)
+    assertMutationResult(result)
   }
 
   return {
     rateLimit: rateLimiter.rateLimit,
 
     async acquire(submissionId) {
-      const { completed, digest, lock } = keysFor(submissionId)
+      const { completed, lock } = keysFor(submissionId)
 
       try {
-        if ((await redis.get(completed)) !== null) return 'completed'
+        if ((await redis.get(completed)) !== null) return { state: 'completed' }
 
         const token = randomBytes(32).toString('hex')
         const acquired = await redis.set(lock, token, { NX: true, EX: LOCK_TTL_SECONDS })
 
         if (acquired === 'OK') {
-          tokensByDigest.set(digest, token)
+          const lease = Object.freeze({ submissionId, token })
           if ((await redis.get(completed)) !== null) {
-            await releaseToken(digest, lock, token)
-            return 'completed'
+            await releaseLease(lease)
+            return { state: 'completed' }
           }
-          return 'acquired'
+          return { state: 'acquired', lease }
         }
 
-        return (await redis.get(completed)) !== null ? 'completed' : 'in-progress'
+        return (await redis.get(completed)) !== null
+          ? { state: 'completed' }
+          : { state: 'in-progress' }
       } catch (error) {
         toUnavailable(error)
       }
     },
 
-    async complete(submissionId) {
-      const { completed, digest, lock } = keysFor(submissionId)
+    async complete(lease) {
+      const { completed, lock } = keysFor(lease.submissionId)
 
       try {
-        await redis.set(completed, '1', { EX: COMPLETED_TTL_SECONDS })
-        const token = tokensByDigest.get(digest)
-        if (token) await releaseToken(digest, lock, token)
+        const result = await redis.eval(COMPLETE_LOCK_SCRIPT, {
+          keys: [lock, completed],
+          arguments: [lease.token, String(COMPLETED_TTL_SECONDS)],
+        })
+        assertMutationResult(result)
       } catch (error) {
         toUnavailable(error)
       }
     },
 
-    async release(submissionId) {
-      const { digest, lock } = keysFor(submissionId)
-      const token = tokensByDigest.get(digest)
-      if (!token) return
-
+    async release(lease) {
       try {
-        await releaseToken(digest, lock, token)
+        await releaseLease(lease)
       } catch (error) {
         toUnavailable(error)
       }
@@ -149,10 +170,10 @@ export const submissionCoordinator: SubmissionCoordinator = {
   async acquire(submissionId) {
     return (await getEnvironmentCoordinator()).acquire(submissionId)
   },
-  async complete(submissionId) {
-    await (await getEnvironmentCoordinator()).complete(submissionId)
+  async complete(lease) {
+    await (await getEnvironmentCoordinator()).complete(lease)
   },
-  async release(submissionId) {
-    await (await getEnvironmentCoordinator()).release(submissionId)
+  async release(lease) {
+    await (await getEnvironmentCoordinator()).release(lease)
   },
 }
