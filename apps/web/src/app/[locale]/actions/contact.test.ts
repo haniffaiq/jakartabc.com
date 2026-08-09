@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   sendEmail: vi.fn(),
   verifyTurnstile: vi.fn(),
-  checkRateLimit: vi.fn(),
+  rateLimit: vi.fn(),
   headersGet: vi.fn(),
 }))
 
@@ -34,7 +34,7 @@ vi.mock('@/lib/anti-spam/turnstile', () => ({
 }))
 
 vi.mock('@/lib/anti-spam/rate-limit', () => ({
-  checkRateLimit: mocks.checkRateLimit,
+  rateLimiter: { rateLimit: mocks.rateLimit },
 }))
 
 import { submitContact } from './contact'
@@ -55,24 +55,29 @@ const validContact = {
   turnstileToken: 'turnstile-token',
 }
 
+const trustedProxySecret = 'proxy-secret-value-that-is-at-least-32-characters'
+
 describe('submitContact', () => {
   beforeEach(() => {
     mocks.create.mockReset()
     mocks.sendEmail.mockReset()
     mocks.verifyTurnstile.mockReset()
-    mocks.checkRateLimit.mockReset()
+    mocks.rateLimit.mockReset()
     mocks.headersGet.mockReset()
 
     mocks.verifyTurnstile.mockResolvedValue(true)
-    mocks.checkRateLimit.mockReturnValue({ allowed: true })
-    mocks.headersGet.mockImplementation((name: string) =>
-      name.toLowerCase() === 'x-forwarded-for' ? '1.1.1.1, 2.2.2.2' : null,
-    )
+    mocks.rateLimit.mockResolvedValue({ allowed: true, remaining: 4 })
+    mocks.headersGet.mockImplementation((name: string) => {
+      if (name.toLowerCase() === 'x-jbc-proxy-secret') return trustedProxySecret
+      if (name.toLowerCase() === 'x-forwarded-for') return '1.1.1.1, 2.2.2.2'
+      return null
+    })
     mocks.create.mockResolvedValue({ id: 7 })
     mocks.sendEmail.mockResolvedValue({ ok: true, id: 'message-id' })
 
     process.env.SALES_EMAIL = 'sales@example.com'
     process.env.NEXT_PUBLIC_SITE_URL = 'https://jakartabc.com'
+    process.env.TRUSTED_PROXY_SECRET = trustedProxySecret
   })
 
   it('persists the contact message and sends sales plus visitor emails', async () => {
@@ -80,7 +85,7 @@ describe('submitContact', () => {
 
     expect(result).toEqual({ ok: true })
     expect(mocks.verifyTurnstile).toHaveBeenCalledWith('turnstile-token', '1.1.1.1')
-    expect(mocks.checkRateLimit).toHaveBeenCalledWith('1.1.1.1:sari@example.com')
+    expect(mocks.rateLimit).toHaveBeenCalledWith('contact', '1.1.1.1:sari@example.com')
     expect(mocks.create).toHaveBeenCalledWith({
       collection: 'contact-messages',
       data: {
@@ -131,17 +136,46 @@ describe('submitContact', () => {
     const result = await submitContact(fd(validContact), '1.1.1.1')
 
     expect(result).toEqual({ ok: false, code: 'captcha' })
-    expect(mocks.checkRateLimit).not.toHaveBeenCalled()
+    expect(mocks.rateLimit).not.toHaveBeenCalled()
   })
 
   it('returns rate when the rate limiter rejects the submission', async () => {
-    mocks.checkRateLimit.mockReturnValue({ allowed: false, retryAfter: 300 })
+    mocks.rateLimit.mockResolvedValue({ allowed: false, retryAfter: 300 })
 
     const result = await submitContact(fd(validContact), '1.1.1.1')
 
     expect(result).toEqual({ ok: false, code: 'rate' })
     expect(mocks.create).not.toHaveBeenCalled()
   })
+
+  it('fails closed without persistence when Redis is unavailable', async () => {
+    mocks.rateLimit.mockRejectedValue(new Error('Redis is unavailable'))
+
+    const result = await submitContact(fd(validContact), '1.1.1.1')
+
+    expect(result).toEqual({ ok: false, code: 'temporarily-unavailable' })
+    expect(mocks.create).not.toHaveBeenCalled()
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+  })
+
+  it.each([null, 'invalid-proxy-proof'])(
+    'ignores spoofed forwarding headers when proxy proof is %s',
+    async (proof) => {
+      mocks.headersGet.mockImplementation((name: string) => {
+        if (name.toLowerCase() === 'x-jbc-proxy-secret') return proof
+        if (name.toLowerCase() === 'x-forwarded-for') return '203.0.113.44'
+        if (name.toLowerCase() === 'cf-connecting-ip') return '198.51.100.7'
+        if (name.toLowerCase() === 'x-real-ip') return '192.0.2.8'
+        return null
+      })
+
+      const result = await submitContact(fd(validContact))
+
+      expect(result).toEqual({ ok: true })
+      expect(mocks.verifyTurnstile).toHaveBeenCalledWith('turnstile-token', 'unknown')
+      expect(mocks.rateLimit).toHaveBeenCalledWith('contact', 'unknown:sari@example.com')
+    },
+  )
 
   it('requires sales email configuration before anti-spam or persistence', async () => {
     delete process.env.SALES_EMAIL

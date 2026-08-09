@@ -5,24 +5,28 @@ import { headers } from 'next/headers'
 import * as React from 'react'
 import { ContactSales, ContactVisitor, sendEmail, subjects } from '@jakartabc/email'
 
-import { checkRateLimit } from '@/lib/anti-spam/rate-limit'
+import { rateLimiter } from '@/lib/anti-spam/rate-limit'
 import { verifyTurnstile } from '@/lib/anti-spam/turnstile'
 import { getPayloadClient } from '@/lib/payload'
+import { getClientIP } from '@/lib/request/client-ip'
 import { contactSchema } from '@/lib/validation/contact'
 
 export type SubmitResult =
   | { ok: true }
-  | { ok: false; code: 'validation' | 'captcha' | 'rate' | 'persistence' | 'unknown' }
+  | {
+      ok: false
+      code:
+        | 'validation'
+        | 'captcha'
+        | 'rate'
+        | 'persistence'
+        | 'temporarily-unavailable'
+        | 'unknown'
+    }
 
 function optionalCompany(company: string | undefined) {
   const trimmed = company?.trim() ?? ''
   return trimmed ? trimmed : undefined
-}
-
-async function getTrustedClientIp() {
-  const requestHeaders = await headers()
-  const forwarded = requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim()
-  return forwarded || requestHeaders.get('cf-connecting-ip') || requestHeaders.get('x-real-ip') || 'unknown'
 }
 
 export async function submitContact(formData: FormData, _ip?: string): Promise<SubmitResult> {
@@ -35,17 +39,25 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
   const salesEmail = process.env.SALES_EMAIL
   if (!salesEmail) return { ok: false, code: 'unknown' }
 
-  const ip = await getTrustedClientIp()
+  const ip = getClientIP(await headers())
 
   const captchaOk = await verifyTurnstile(data.turnstileToken, ip)
   if (!captchaOk) return { ok: false, code: 'captcha' }
 
-  const rate = checkRateLimit(`${ip}:${data.email}`)
+  let rate
+  try {
+    rate = await rateLimiter.rateLimit('contact', `${ip}:${data.email}`)
+  } catch {
+    return { ok: false, code: 'temporarily-unavailable' }
+  }
   if (!rate.allowed) return { ok: false, code: 'rate' }
 
   const company = optionalCompany(data.company)
   const payload = (await getPayloadClient()) as {
-    create: (args: { collection: string; data: Record<string, unknown> }) => Promise<{ id: string | number }>
+    create: (args: {
+      collection: string
+      data: Record<string, unknown>
+    }) => Promise<{ id: string | number }>
   }
   let id: string | number
 
@@ -109,7 +121,8 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
         : `Hi ${data.name},\n\nWe received your message and will reply within one business day. If urgent, you can also write directly to the address below.`,
   })
 
-  if (!visitorResult.ok) console.warn('[contact] visitor email failed (ignoring)', visitorResult.error)
+  if (!visitorResult.ok)
+    console.warn('[contact] visitor email failed (ignoring)', visitorResult.error)
 
   return { ok: true }
 }

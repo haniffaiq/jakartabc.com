@@ -1,7 +1,9 @@
 const ENDPOINT = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+export const TURNSTILE_TIMEOUT_MS = 5_000
 
 type TurnstileResponse = {
   success?: boolean
+  hostname?: string
 }
 
 export async function verifyTurnstile(token: string, remoteip: string): Promise<boolean> {
@@ -11,34 +13,40 @@ export async function verifyTurnstile(token: string, remoteip: string): Promise<
     return false
   }
 
-  if (secret.startsWith('1x000') && token === 'e2e-turnstile-token') {
-    return true
-  }
-
   try {
-    const params = new URLSearchParams()
-    params.set('secret', secret)
-    params.set('response', token)
+    const expectedHostname = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? '').hostname
+    if (!expectedHostname) return false
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), TURNSTILE_TIMEOUT_MS)
 
-    if (remoteip) {
-      params.set('remoteip', remoteip)
+    try {
+      const params = new URLSearchParams()
+      params.set('secret', secret)
+      params.set('response', token)
+
+      if (remoteip) {
+        params.set('remoteip', remoteip)
+      }
+
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: params,
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        signal: controller.signal,
+      })
+
+      if (!res.ok) {
+        return false
+      }
+
+      const data = (await res.json()) as TurnstileResponse
+
+      return data.success === true && data.hostname === expectedHostname
+    } finally {
+      clearTimeout(timeout)
     }
-
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      body: params,
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-      },
-    })
-
-    if (!res.ok) {
-      return false
-    }
-
-    const data = (await res.json()) as TurnstileResponse
-
-    return data.success === true
   } catch {
     return false
   }

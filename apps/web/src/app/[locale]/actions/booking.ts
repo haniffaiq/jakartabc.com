@@ -9,14 +9,25 @@ import { sendEmail } from '@jakartabc/email/send'
 import { BookingLeadSales } from '@jakartabc/email/templates/BookingLeadSales'
 import { BookingLeadVisitor } from '@jakartabc/email/templates/BookingLeadVisitor'
 
-import { checkRateLimit } from '@/lib/anti-spam/rate-limit'
+import { rateLimiter } from '@/lib/anti-spam/rate-limit'
 import { verifyTurnstile } from '@/lib/anti-spam/turnstile'
 import { getPayloadClient } from '@/lib/payload'
+import { getClientIP } from '@/lib/request/client-ip'
 import { bookingSchema } from '@/lib/validation/booking'
 
 export type SubmitBookingResult =
   | { ok: true }
-  | { ok: false; code: 'validation' | 'captcha' | 'rate' | 'service-unknown' | 'persistence' | 'unknown' }
+  | {
+      ok: false
+      code:
+        | 'validation'
+        | 'captcha'
+        | 'rate'
+        | 'service-unknown'
+        | 'persistence'
+        | 'temporarily-unavailable'
+        | 'unknown'
+    }
 
 type ServiceDoc = {
   id: string | number
@@ -58,15 +69,6 @@ function formDataToBookingObject(formData: FormData): Record<string, unknown> {
   return obj
 }
 
-async function trustedClientIp() {
-  const requestHeaders = await headers()
-  return (
-    requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    requestHeaders.get('x-real-ip')?.trim() ||
-    'unknown'
-  )
-}
-
 export async function submitBooking(formData: FormData): Promise<SubmitBookingResult> {
   const honeypot = formData.get('hp')
   if (typeof honeypot === 'string' && honeypot.length > 0) {
@@ -95,12 +97,17 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
     return { ok: false, code: 'unknown' }
   }
 
-  const ip = await trustedClientIp()
+  const ip = getClientIP(await headers())
 
   const captchaOk = await verifyTurnstile(data.turnstileToken, ip)
   if (!captchaOk) return { ok: false, code: 'captcha' }
 
-  const rateLimit = checkRateLimit(`${ip}:${data.email}`)
+  let rateLimit
+  try {
+    rateLimit = await rateLimiter.rateLimit('booking', `${ip}:${data.email}`)
+  } catch {
+    return { ok: false, code: 'temporarily-unavailable' }
+  }
   if (!rateLimit.allowed) return { ok: false, code: 'rate' }
 
   const payload = (await getPayloadClient()) as unknown as PayloadBookingClient
