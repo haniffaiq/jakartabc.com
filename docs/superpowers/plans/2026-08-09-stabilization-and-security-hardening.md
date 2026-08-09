@@ -585,11 +585,36 @@ The result for `filename = logo.webp` and `prefix = media` must be `${env.MINIO_
 
 - [ ] **Step 4: Write copy-script tests before the script**
 
-Tests use a temporary source directory and fake S3 client. Assert prefix mapping, content length, SHA-256 comparison, dry-run no-write behavior, skip of matching objects, and nonzero exit on mismatch.
+Tests use a temporary source directory and fake S3 client. Assert prefix mapping,
+content length, SHA-256 comparison, dry-run no-write behavior, skip of matching
+objects, and nonzero exit on mismatch. Also assert sequential bounded planning,
+source-root symlink rejection, the 5,000,000-byte bound for local snapshots and
+remote streams, and conditional creates with `If-None-Match: *`. If a competing
+writer wins, re-read the authoritative object once: an exact body is a skip and
+a mismatch is a nonzero result without retrying the write.
 
 - [ ] **Step 5: Implement the deterministic copy script**
 
-The command accepts `--source apps/web/uploads`, `--dry-run`, and `--verify-only`. It never deletes source files. It prints only counts and object keys, never credentials. Export its pure planner/verifier functions so tests do not require MinIO.
+The root command `pnpm media:copy` accepts `--source`, `--dry-run`, and
+`--verify-only`. Its cwd-independent default source is the repository's
+`apps/web/uploads` directory. It never deletes source files or overwrites an
+existing object. It prints only counts and object keys, never credentials.
+Export its pure planner/verifier functions so tests do not require MinIO.
+
+The migration command is an operator/build-time tool, not part of the minimal
+production runtime image. Run it from a checkout or builder stage that has the
+root development dependencies installed with `pnpm install --frozen-lockfile`;
+the root manifest directly owns both `tsx` and `@aws-sdk/client-s3`, so the
+command does not depend on another workspace package's `node_modules`.
+
+Smoke the exact default-source command from outside the repository cwd:
+
+```bash
+pnpm --dir /absolute/path/to/jakartabc.com media:copy -- --dry-run
+```
+
+Task 14 remains responsible for the production copy/verify rehearsal, URL
+switch, rollback window, and legacy-source retention.
 
 - [ ] **Step 6: Verify and commit**
 

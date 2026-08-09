@@ -11,13 +11,13 @@ import {
   ContactMessages,
   Footer,
   Insights,
-  Media,
   NavMenu,
   Regulations,
   Services,
   SiteSettings,
   Users,
 } from '@jakartabc/content'
+import { getMediaStoragePath, Media } from '@jakartabc/content/collections/Media'
 import { env } from './env'
 
 const filename = fileURLToPath(import.meta.url)
@@ -30,8 +30,8 @@ export function generateMediaFileURL({
   filename: string
   prefix?: null | string
 }) {
-  const normalizedPrefix = prefix?.trim() || 'media'
-  const key = [normalizedPrefix, filename]
+  const storagePath = getMediaStoragePath(prefix, filename)
+  const key = [storagePath.prefix, storagePath.filename]
     .filter((segment): segment is string => Boolean(segment))
     .flatMap((segment) => segment.split('/'))
     .filter(Boolean)
@@ -104,6 +104,7 @@ export default buildConfig({
     push: false,
   }),
   upload: {
+    abortOnLimit: true,
     limits: { fileSize: 5_000_000 },
   },
 })

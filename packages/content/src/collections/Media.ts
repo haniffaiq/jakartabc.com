@@ -1,13 +1,18 @@
 import { readFile, stat } from 'node:fs/promises'
 import type { CollectionConfig, File } from 'payload'
 import { ValidationError } from 'payload'
+import { sanitizeFilename } from 'payload/shared'
 
 import { editorialOnly } from '../access/roles'
 
 export const MEDIA_MAX_FILE_SIZE = 5_000_000
+export const MEDIA_STORAGE_PREFIX = 'media'
 
 const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'] as const
 type AllowedMimeType = (typeof allowedMimeTypes)[number]
+type IncomingMediaFile = Pick<File, 'data' | 'mimetype' | 'name' | 'size' | 'tempFilePath'> & {
+  truncated?: boolean
+}
 
 function hasPrefix(data: Buffer, signature: readonly number[]) {
   return signature.every((byte, index) => data[index] === byte)
@@ -27,9 +32,65 @@ export function detectMediaMimeType(data: Buffer): AllowedMimeType | undefined {
   return undefined
 }
 
-export function validateMediaFile(file?: Pick<File, 'data' | 'mimetype' | 'name' | 'size'>) {
+export function normalizeMediaPrefix(prefix: unknown): typeof MEDIA_STORAGE_PREFIX {
+  if (prefix === undefined || prefix === null || prefix === '') return MEDIA_STORAGE_PREFIX
+  if (prefix !== MEDIA_STORAGE_PREFIX) {
+    throw new Error(`Media prefix must be exactly "${MEDIA_STORAGE_PREFIX}".`)
+  }
+  return MEDIA_STORAGE_PREFIX
+}
+
+export function validateMediaFilename(filename: unknown) {
+  if (typeof filename !== 'string' || filename.length === 0) {
+    throw new Error('Media filename must be a non-empty string.')
+  }
+
+  let decoded: string
+  try {
+    decoded = decodeURIComponent(filename)
+  } catch {
+    throw new Error('Media filename contains invalid percent encoding.')
+  }
+
+  // Reject raw, once-decoded, and still-encoded path/control syntax so the
+  // public URL and storage-s3 key can never normalize to different objects.
+  // eslint-disable-next-line no-control-regex
+  const hasUnsafeCharacters = (value: string) => /[\\/\x00-\x1f\x80-\x9f]/.test(value)
+  if (
+    hasUnsafeCharacters(filename) ||
+    hasUnsafeCharacters(decoded) ||
+    decoded === '.' ||
+    decoded === '..' ||
+    /%[0-9a-f]{2}/i.test(decoded)
+  ) {
+    throw new Error('Media filename contains unsafe path or control characters.')
+  }
+
+  let sanitized: string
+  try {
+    sanitized = sanitizeFilename(filename)
+  } catch {
+    throw new Error('Media filename is invalid.')
+  }
+  if (sanitized !== filename) {
+    throw new Error('Media filename is not canonical.')
+  }
+  return filename
+}
+
+export function getMediaStoragePath(prefix: unknown, filename: unknown) {
+  return {
+    filename: validateMediaFilename(filename),
+    prefix: normalizeMediaPrefix(prefix),
+  }
+}
+
+export function validateMediaFile(file?: IncomingMediaFile) {
   if (!file) return
 
+  if (file.truncated) {
+    throw new Error('Media upload was truncated and cannot be accepted.')
+  }
   if (!allowedMimeTypes.includes(file.mimetype as AllowedMimeType)) {
     throw new Error(`Media MIME type ${file.mimetype} is not allowed.`)
   }
@@ -48,7 +109,7 @@ export function validateMediaFile(file?: Pick<File, 'data' | 'mimetype' | 'name'
   }
 }
 
-async function validateIncomingMediaFile(file?: File) {
+async function validateIncomingMediaFile(file?: IncomingMediaFile) {
   if (!file) return
 
   if (!file.tempFilePath) {
@@ -74,10 +135,45 @@ async function validateMediaUploadBeforeOperation({
   operation,
   req,
 }: Parameters<NonNullable<NonNullable<CollectionConfig['hooks']>['beforeOperation']>[number]>[0]) {
-  if ((operation !== 'create' && operation !== 'update') || !req.file) return args
+  if (operation !== 'create' && operation !== 'update') return args
+
+  const operationArgs = args as typeof args & { data?: Record<string, unknown> }
+  const incomingData = operationArgs.data ?? {}
+  let prefix: typeof MEDIA_STORAGE_PREFIX
 
   try {
-    await validateIncomingMediaFile(req.file)
+    prefix = normalizeMediaPrefix(incomingData.prefix)
+  } catch (error) {
+    throw new ValidationError({
+      errors: [
+        {
+          message: error instanceof Error ? error.message : 'Media prefix validation failed.',
+          path: 'prefix',
+        },
+      ],
+      req,
+    })
+  }
+
+  const incomingFilename = req.file?.name ?? incomingData.filename
+  if (incomingFilename !== undefined && incomingFilename !== null) {
+    try {
+      validateMediaFilename(incomingFilename)
+    } catch (error) {
+      throw new ValidationError({
+        errors: [
+          {
+            message: error instanceof Error ? error.message : 'Media filename validation failed.',
+            path: 'file',
+          },
+        ],
+        req,
+      })
+    }
+  }
+
+  try {
+    await validateIncomingMediaFile(req.file as IncomingMediaFile | undefined)
   } catch (error) {
     throw new ValidationError({
       errors: [
@@ -90,7 +186,7 @@ async function validateMediaUploadBeforeOperation({
     })
   }
 
-  return args
+  return { ...operationArgs, data: { ...incomingData, prefix } }
 }
 
 export const Media: CollectionConfig = {

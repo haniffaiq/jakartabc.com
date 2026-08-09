@@ -317,10 +317,13 @@ actual magic bytes, requires the detected and declared MIME types to match, and
 enforces a 5,000,000-byte limit for both buffered and temporary files.
 
 The application no longer treats a local filesystem path or Docker upload
-volume as durable media storage. Legacy objects are copied to `media/`, then
-verified by object count, filename/key mapping, size, and checksum where
-available before the URL switch. The old media copy remains untouched through
-the rollback window.
+volume as durable media storage. Legacy objects are copied to `media/` with
+conditional creates, bounded local/remote reads, and an authoritative re-check
+when a concurrent writer wins. They are then verified by object count,
+filename/key mapping, size, and checksum before the URL switch. The root copy
+command runs from a checkout or builder stage with root development
+dependencies installed; it is not required in the minimal production runtime
+image. The old media copy remains untouched through the rollback window.
 
 ### Redis ownership
 

@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto'
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { Readable } from 'node:stream'
+import { setTimeout as delay } from 'node:timers/promises'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import * as copyModule from './copy-media-to-minio'
@@ -34,6 +36,7 @@ const tempDirectories: string[] = []
 const planMediaCopy = copyModule.planMediaCopy as unknown as (
   source: string,
   prefix?: string,
+  options?: { readSnapshot: (filename: string) => Promise<Buffer> },
 ) => Promise<Entry[]>
 const executeMediaCopy = copyModule.executeMediaCopy as unknown as (args: {
   dryRun?: boolean
@@ -170,9 +173,10 @@ describe('local media to MinIO copy', () => {
       source: 'legacy/uploads',
       verifyOnly: false,
     })
+    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
     expect(parseMediaCopyArgs(['--verify-only'])).toEqual({
       dryRun: false,
-      source: 'apps/web/uploads',
+      source: path.join(repositoryRoot, 'apps/web/uploads'),
       verifyOnly: true,
     })
     expect(() => parseMediaCopyArgs(['--dry-run', '--verify-only'])).toThrow(/cannot be combined/i)
@@ -243,6 +247,7 @@ describe('local media to MinIO copy', () => {
     expect(uploadInput).toMatchObject({
       Bucket: 'jakartabc',
       ContentLength: 4,
+      IfNoneMatch: '*',
       Key: 'media/logo.png',
       Metadata: { sha256: entry.sha256 },
     })
@@ -290,6 +295,142 @@ describe('local media to MinIO copy', () => {
 
     expect(result).toMatchObject({ copied: 0, exitCode: 1, mismatched: 1 })
     expect(writes).toBe(0)
+  })
+
+  it.each([
+    ['matching', Buffer.from('logo'), { exitCode: 0, mismatched: 0, skipped: 1 }],
+    ['different', Buffer.from('evil'), { exitCode: 1, mismatched: 1, skipped: 0 }],
+  ])(
+    'classifies a %s object that wins the conditional PUT race',
+    async (_case, racedBody, expected) => {
+      const source = await temporarySource()
+      await writeFile(path.join(source, 'logo.png'), 'logo')
+      const [entry] = await planMediaCopy(source)
+      let gets = 0
+      let puts = 0
+      const store = createS3MediaObjectStore(
+        {
+          send: async (command) => {
+            if (command.constructor.name === 'GetObjectCommand') {
+              gets += 1
+              if (gets === 1) {
+                throw Object.assign(new Error('missing'), { $metadata: { httpStatusCode: 404 } })
+              }
+              return { Body: Readable.from([racedBody]), ContentLength: racedBody.length }
+            }
+            puts += 1
+            expect(command.input.IfNoneMatch).toBe('*')
+            throw Object.assign(new Error('race'), {
+              $metadata: { httpStatusCode: 412 },
+              name: 'PreconditionFailed',
+            })
+          },
+        },
+        'jakartabc',
+      )
+
+      const result = await executeMediaCopy({ entries: [entry], store })
+
+      expect(result).toMatchObject({ copied: 0, ...expected })
+      expect(puts).toBe(1)
+      expect(gets).toBe(2)
+    },
+  )
+
+  it('plans many files with at most one snapshot read in flight', async () => {
+    const source = await temporarySource()
+    for (let index = 0; index < 20; index += 1) {
+      await writeFile(path.join(source, `${String(index).padStart(2, '0')}.png`), `file-${index}`)
+    }
+    let active = 0
+    let maximumActive = 0
+
+    const entries = await planMediaCopy(source, 'media', {
+      readSnapshot: async (filename) => {
+        active += 1
+        maximumActive = Math.max(maximumActive, active)
+        await delay(2)
+        const snapshot = await readFile(filename)
+        active -= 1
+        return snapshot
+      },
+    })
+
+    expect(entries).toHaveLength(20)
+    expect(maximumActive).toBe(1)
+  })
+
+  it('rejects a local source file over five megabytes during planning', async () => {
+    const source = await temporarySource()
+    await writeFile(path.join(source, 'oversized.png'), Buffer.alloc(5_000_001))
+
+    await expect(planMediaCopy(source)).rejects.toThrow(/5,000,000 bytes/i)
+  })
+
+  it('rejects a symlink used as the source root', async () => {
+    const parent = await temporarySource()
+    const realSource = path.join(parent, 'real')
+    const linkedSource = path.join(parent, 'linked')
+    await mkdir(realSource)
+    await symlink(realSource, linkedSource, 'dir')
+
+    await expect(planMediaCopy(linkedSource)).rejects.toThrow(/symbolic link/i)
+  })
+
+  it('rejects an oversized remote object while streaming its bytes', async () => {
+    const store = createS3MediaObjectStore(
+      {
+        send: async () => ({
+          Body: Readable.from([Buffer.alloc(5_000_000), Buffer.from([1])]),
+          ContentLength: 5_000_001,
+        }),
+      },
+      'jakartabc',
+    )
+
+    await expect(store.inspectObject('media/oversized.png')).rejects.toThrow(/5,000,000 bytes/i)
+  })
+
+  it('prefers bounded async iteration over transformToByteArray', async () => {
+    let transformed = false
+    const body = Object.assign(Readable.from([Buffer.from('bytes')]), {
+      transformToByteArray: async () => {
+        transformed = true
+        throw new Error('unbounded transform must not run')
+      },
+    })
+    const store = createS3MediaObjectStore(
+      { send: async () => ({ Body: body, ContentLength: 5 }) },
+      'jakartabc',
+    )
+
+    await expect(store.inspectObject('media/logo.png')).resolves.toEqual({
+      sha256: createHash('sha256').update('bytes').digest('hex'),
+      size: 5,
+    })
+    expect(transformed).toBe(false)
+  })
+
+  it('streams the web-stream fallback without buffering the whole object', async () => {
+    const body = {
+      transformToWebStream: () =>
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(Buffer.from('web'))
+            controller.enqueue(Buffer.from('-stream'))
+            controller.close()
+          },
+        }),
+    }
+    const store = createS3MediaObjectStore(
+      { send: async () => ({ Body: body, ContentLength: 10 }) },
+      'jakartabc',
+    )
+
+    await expect(store.inspectObject('media/logo.png')).resolves.toEqual({
+      sha256: createHash('sha256').update('web-stream').digest('hex'),
+      size: 10,
+    })
   })
 
   it('runs dry without writes and logs only keys plus aggregate counts', async () => {

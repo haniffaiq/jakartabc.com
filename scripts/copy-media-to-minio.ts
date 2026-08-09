@@ -1,9 +1,14 @@
 import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { lstat, open, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+
+export const MEDIA_COPY_MAX_BYTES = 5_000_000
+export const DEFAULT_MEDIA_SOURCE = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../apps/web/uploads',
+)
 
 export type MediaCopyEntry = {
   key: string
@@ -20,7 +25,7 @@ export type RemoteMediaObject = {
 
 export type MediaObjectStore = {
   inspectObject(key: string): Promise<RemoteMediaObject | null>
-  putObject(entry: MediaCopyEntry): Promise<void>
+  putObject(entry: MediaCopyEntry): Promise<'already-exists' | 'uploaded' | void>
 }
 
 export type MediaCopyResult = {
@@ -33,7 +38,7 @@ export type MediaCopyResult = {
 }
 
 export function parseMediaCopyArgs(args: string[]) {
-  const options = { dryRun: false, source: 'apps/web/uploads', verifyOnly: false }
+  const options = { dryRun: false, source: DEFAULT_MEDIA_SOURCE, verifyOnly: false }
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
@@ -63,29 +68,48 @@ type S3CommandClient = {
   send(command: GetObjectCommand | PutObjectCommand): Promise<unknown>
 }
 
-async function sha256Body(body: unknown) {
+function assertWithinMediaLimit(size: number, source: string) {
+  if (size > MEDIA_COPY_MAX_BYTES) {
+    throw new Error(
+      `${source} exceeds the ${MEDIA_COPY_MAX_BYTES.toLocaleString('en-US')} bytes media limit.`,
+    )
+  }
+}
+
+async function sha256Body(body: unknown, declaredSize?: number) {
   if (!body) throw new Error('MinIO returned an empty object body during verification.')
+  if (typeof declaredSize === 'number') assertWithinMediaLimit(declaredSize, 'Remote media')
   const hash = createHash('sha256')
   let size = 0
 
-  if (
-    typeof body === 'object' &&
-    'transformToByteArray' in body &&
-    typeof body.transformToByteArray === 'function'
-  ) {
-    const bytes = await body.transformToByteArray()
-    hash.update(bytes)
-    return { sha256: hash.digest('hex'), size: bytes.byteLength }
-  }
-  if (typeof body === 'object' && Symbol.asyncIterator in body) {
-    for await (const chunk of body as AsyncIterable<Uint8Array>) {
-      hash.update(chunk)
-      size += chunk.byteLength
-    }
-    return { sha256: hash.digest('hex'), size }
+  const update = (chunk: Uint8Array) => {
+    size += chunk.byteLength
+    assertWithinMediaLimit(size, 'Remote media')
+    hash.update(chunk)
   }
 
-  throw new Error('MinIO returned an unsupported object body during verification.')
+  if (typeof body === 'object' && Symbol.asyncIterator in body) {
+    for await (const chunk of body as AsyncIterable<Uint8Array>) update(chunk)
+  } else if (
+    typeof body === 'object' &&
+    'transformToWebStream' in body &&
+    typeof body.transformToWebStream === 'function'
+  ) {
+    const reader = body.transformToWebStream().getReader()
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        update(value)
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  } else {
+    throw new Error('MinIO returned an unsupported object body during verification.')
+  }
+
+  return { sha256: hash.digest('hex'), size }
 }
 
 function isNotFound(error: unknown) {
@@ -101,6 +125,18 @@ function isNotFound(error: unknown) {
   return statusCode === 404 || name === 'NotFound' || name === 'NoSuchKey'
 }
 
+function isPreconditionFailed(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+  const statusCode =
+    '$metadata' in error &&
+    error.$metadata &&
+    typeof error.$metadata === 'object' &&
+    'httpStatusCode' in error.$metadata
+      ? error.$metadata.httpStatusCode
+      : undefined
+  return statusCode === 412 || ('name' in error && error.name === 'PreconditionFailed')
+}
+
 export function createS3MediaObjectStore(
   client: S3CommandClient,
   bucket: string,
@@ -112,29 +148,37 @@ export function createS3MediaObjectStore(
       try {
         const object = (await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }))) as {
           Body?: unknown
+          ContentLength?: number
         }
-        return await sha256Body(object.Body)
+        return await sha256Body(object.Body, object.ContentLength)
       } catch (error) {
         if (isNotFound(error)) return null
         throw error
       }
     },
     putObject: async (entry) => {
-      const snapshot = await readFile(entry.sourcePath)
+      const snapshot = await readBoundedSnapshot(entry.sourcePath)
       const snapshotSha256 = createHash('sha256').update(snapshot).digest('hex')
       if (snapshot.length !== entry.size || snapshotSha256 !== entry.sha256) {
         throw new SourceMediaChangedError(entry.key)
       }
 
-      await client.send(
-        new PutObjectCommand({
-          Body: snapshot,
-          Bucket: bucket,
-          ContentLength: entry.size,
-          Key: entry.key,
-          Metadata: { sha256: entry.sha256 },
-        }),
-      )
+      try {
+        await client.send(
+          new PutObjectCommand({
+            Body: snapshot,
+            Bucket: bucket,
+            ContentLength: entry.size,
+            IfNoneMatch: '*',
+            Key: entry.key,
+            Metadata: { sha256: entry.sha256 },
+          }),
+        )
+        return 'uploaded'
+      } catch (error) {
+        if (isPreconditionFailed(error)) return 'already-exists'
+        throw error
+      }
     },
   }
 }
@@ -229,32 +273,64 @@ async function listFiles(directory: string): Promise<string[]> {
   return files
 }
 
-async function sha256File(filename: string) {
-  const hash = createHash('sha256')
-  for await (const chunk of createReadStream(filename)) hash.update(chunk as Buffer)
-  return hash.digest('hex')
+async function readBoundedSnapshot(filename: string) {
+  const handle = await open(filename, 'r')
+  try {
+    const fileStat = await handle.stat()
+    if (!fileStat.isFile()) throw new Error(`Media source is not a regular file: ${filename}`)
+    assertWithinMediaLimit(fileStat.size, 'Local media')
+
+    const snapshot = Buffer.allocUnsafe(fileStat.size)
+    let offset = 0
+    while (offset < snapshot.length) {
+      const { bytesRead } = await handle.read(snapshot, offset, snapshot.length - offset, offset)
+      if (bytesRead === 0) throw new SourceMediaChangedError(filename)
+      offset += bytesRead
+    }
+    const extra = Buffer.allocUnsafe(1)
+    const { bytesRead: extraBytes } = await handle.read(extra, 0, 1, offset)
+    if (extraBytes !== 0) throw new SourceMediaChangedError(filename)
+    return snapshot
+  } finally {
+    await handle.close()
+  }
 }
 
-export async function planMediaCopy(source: string, prefix = 'media'): Promise<MediaCopyEntry[]> {
+export async function planMediaCopy(
+  source: string,
+  prefix = 'media',
+  {
+    readSnapshot = readBoundedSnapshot,
+  }: { readSnapshot?: (filename: string) => Promise<Buffer> } = {},
+): Promise<MediaCopyEntry[]> {
   const sourceRoot = path.resolve(source)
-  const sourceStat = await stat(sourceRoot)
+  const sourceStat = await lstat(sourceRoot)
+  if (sourceStat.isSymbolicLink()) {
+    throw new Error(`Refusing symbolic link as media source root: ${sourceRoot}`)
+  }
   if (!sourceStat.isDirectory()) throw new Error(`Media source is not a directory: ${sourceRoot}`)
 
   const safePrefix = normalizePrefix(prefix)
   const files = await listFiles(sourceRoot)
-  const entries = await Promise.all(
-    files.map(async (sourcePath) => {
-      const fileStat = await stat(sourcePath)
-      const relativePath = path.relative(sourceRoot, sourcePath).split(path.sep).join('/')
-      return {
-        key: `${safePrefix}/${relativePath}`,
-        relativePath,
-        sha256: await sha256File(sourcePath),
-        size: fileStat.size,
-        sourcePath,
-      }
-    }),
-  )
+  const entries: MediaCopyEntry[] = []
+  for (const sourcePath of files) {
+    const fileStat = await lstat(sourcePath)
+    if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
+      throw new Error(`Refusing non-regular media source: ${sourcePath}`)
+    }
+    assertWithinMediaLimit(fileStat.size, 'Local media')
+    const snapshot = await readSnapshot(sourcePath)
+    assertWithinMediaLimit(snapshot.length, 'Local media')
+    if (snapshot.length !== fileStat.size) throw new SourceMediaChangedError(sourcePath)
+    const relativePath = path.relative(sourceRoot, sourcePath).split(path.sep).join('/')
+    entries.push({
+      key: `${safePrefix}/${relativePath}`,
+      relativePath,
+      sha256: createHash('sha256').update(snapshot).digest('hex'),
+      size: snapshot.length,
+      sourcePath,
+    })
+  }
 
   return entries.sort((left, right) => left.key.localeCompare(right.key))
 }
@@ -306,8 +382,9 @@ export async function executeMediaCopy({
       continue
     }
 
+    let uploadResult: 'already-exists' | 'uploaded' | void
     try {
-      await store.putObject(entry)
+      uploadResult = await store.putObject(entry)
     } catch (error) {
       if (error instanceof SourceMediaChangedError) {
         result.mismatched += 1
@@ -324,7 +401,8 @@ export async function executeMediaCopy({
       result.mismatched += 1
       result.exitCode = 1
     } else {
-      result.copied += 1
+      if (uploadResult === 'already-exists') result.skipped += 1
+      else result.copied += 1
     }
   }
 

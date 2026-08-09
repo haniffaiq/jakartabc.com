@@ -33,6 +33,13 @@ afterEach(() => {
 })
 
 describe('Payload MinIO storage', () => {
+  it('aborts multipart parsing instead of accepting truncated files', async () => {
+    const payloadModule = await import('./payload.config')
+    const config = await payloadModule.default
+
+    expect(config.upload).toMatchObject({ abortOnLimit: true, limits: { fileSize: 5_000_000 } })
+  })
+
   it('disables local media storage through the official S3 adapter', async () => {
     const payloadModule = await import('./payload.config')
     const config = await payloadModule.default
@@ -61,6 +68,29 @@ describe('Payload MinIO storage', () => {
           prefix,
         }),
       ).toBe('https://media.example.test/jakartabc/media/legacy.webp')
+    }
+
+    for (const unsafe of ['../media', '..\\media', '%2e%2e%2fmedia', 'media\u0000']) {
+      expect(() =>
+        (generateMediaFileURL as (args: { filename: string; prefix?: string }) => string)({
+          filename: 'logo.webp',
+          prefix: unsafe,
+        }),
+      ).toThrow(/prefix/i)
+    }
+
+    for (const unsafe of [
+      '../logo.webp',
+      '..\\logo.webp',
+      '%2e%2e%2flogo.webp',
+      'logo\u0000.webp',
+    ]) {
+      expect(() =>
+        (generateMediaFileURL as (args: { filename: string; prefix?: string }) => string)({
+          filename: unsafe,
+          prefix: 'media',
+        }),
+      ).toThrow(/filename/i)
     }
   })
 })

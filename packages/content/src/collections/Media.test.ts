@@ -16,6 +16,25 @@ const request = (role?: 'admin' | 'editor' | 'client') => ({
   req: { user: role ? { role } : null },
 })
 
+function runBeforeOperation({
+  data = {},
+  file,
+  operation = 'create',
+}: {
+  data?: Record<string, unknown>
+  file?: Record<string, unknown>
+  operation?: 'create' | 'update'
+}) {
+  const hook = Media.hooks?.beforeOperation?.[0]
+  return hook?.({
+    args: { data },
+    collection: { config: Media },
+    context: {},
+    operation,
+    req: { context: {}, file },
+  } as never)
+}
+
 afterEach(async () => {
   await Promise.all(
     tempDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true })),
@@ -100,6 +119,63 @@ describe('Media collection', () => {
     ).toThrow(/size does not match/i)
   })
 
+  it('rejects a truncated buffered upload even when its visible bytes are valid', () => {
+    expect(() =>
+      validateMediaFile({
+        data: png,
+        mimetype: 'image/png',
+        name: 'truncated.png',
+        size: png.length,
+        truncated: true,
+      } as never),
+    ).toThrow(/truncated/i)
+  })
+
+  it('rejects an actually oversized buffered upload', () => {
+    const oversized = Buffer.concat([png, Buffer.alloc(5_000_001 - png.length)])
+    expect(() =>
+      validateMediaFile({
+        data: oversized,
+        mimetype: 'image/png',
+        name: 'oversized.png',
+        size: oversized.length,
+      }),
+    ).toThrow(/5,000,000 bytes/i)
+  })
+
+  it('canonicalizes a missing prefix on update without a replacement file', async () => {
+    await expect(
+      runBeforeOperation({ data: { alt: 'updated' }, operation: 'update' }),
+    ).resolves.toMatchObject({ data: { alt: 'updated', prefix: 'media' } })
+  })
+
+  it.each(['../media', '..\\media', '%2e%2e%2fmedia', 'media\u0000'])(
+    'rejects unsafe API prefix %j',
+    async (prefix) => {
+      await expect(
+        runBeforeOperation({ data: { prefix }, operation: 'update' }),
+      ).rejects.toMatchObject({
+        data: { errors: [{ message: expect.stringMatching(/prefix/i), path: 'prefix' }] },
+        status: 400,
+      })
+    },
+  )
+
+  it.each(['../logo.png', '..\\logo.png', '%2e%2e%2flogo.png', 'logo\u0000.png'])(
+    'rejects unsafe upload filename %j',
+    async (name) => {
+      await expect(
+        runBeforeOperation({
+          data: { prefix: 'media' },
+          file: { data: png, mimetype: 'image/png', name, size: png.length },
+        }),
+      ).rejects.toMatchObject({
+        data: { errors: [{ message: expect.stringMatching(/filename/i), path: 'file' }] },
+        status: 400,
+      })
+    },
+  )
+
   it('reads and validates temporary upload files in the pre-operation hook', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'jakartabc-media-upload-'))
     tempDirectories.push(directory)
@@ -107,6 +183,7 @@ describe('Media collection', () => {
     await writeFile(tempFilePath, png)
     const hook = Media.hooks?.beforeOperation?.[0]
     const args = {
+      args: { data: { prefix: 'media' } },
       collection: { config: Media },
       context: {},
       operation: 'create',
@@ -126,6 +203,54 @@ describe('Media collection', () => {
       data: {
         errors: [{ message: expect.stringMatching(/does not match/i), path: 'file' }],
       },
+      status: 400,
+    })
+  })
+
+  it('rejects a truncated temporary upload before reading it', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'jakartabc-media-upload-'))
+    tempDirectories.push(directory)
+    const tempFilePath = path.join(directory, 'upload.tmp')
+    await writeFile(tempFilePath, png)
+
+    await expect(
+      runBeforeOperation({
+        data: { prefix: 'media' },
+        file: {
+          data: Buffer.alloc(0),
+          mimetype: 'image/png',
+          name: 'truncated.png',
+          size: png.length,
+          tempFilePath,
+          truncated: true,
+        },
+      }),
+    ).rejects.toMatchObject({
+      data: { errors: [{ message: expect.stringMatching(/truncated/i), path: 'file' }] },
+      status: 400,
+    })
+  })
+
+  it('rejects an oversized temporary upload before reading its bytes', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'jakartabc-media-upload-'))
+    tempDirectories.push(directory)
+    const tempFilePath = path.join(directory, 'upload.tmp')
+    const oversized = Buffer.concat([png, Buffer.alloc(5_000_001 - png.length)])
+    await writeFile(tempFilePath, oversized)
+
+    await expect(
+      runBeforeOperation({
+        data: { prefix: 'media' },
+        file: {
+          data: Buffer.alloc(0),
+          mimetype: 'image/png',
+          name: 'oversized.png',
+          size: oversized.length,
+          tempFilePath,
+        },
+      }),
+    ).rejects.toMatchObject({
+      data: { errors: [{ message: expect.stringMatching(/5,000,000 bytes/i), path: 'file' }] },
       status: 400,
     })
   })
