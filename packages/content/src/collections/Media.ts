@@ -1,4 +1,5 @@
 import { readFile, stat } from 'node:fs/promises'
+import { isDeepStrictEqual } from 'node:util'
 import type { CollectionConfig, File } from 'payload'
 import { ValidationError } from 'payload'
 import { sanitizeFilename } from 'payload/shared'
@@ -13,6 +14,17 @@ type AllowedMimeType = (typeof allowedMimeTypes)[number]
 type IncomingMediaFile = Pick<File, 'data' | 'mimetype' | 'name' | 'size' | 'tempFilePath'> & {
   truncated?: boolean
 }
+const serverOwnedMediaFields = [
+  'filename',
+  'mimeType',
+  'filesize',
+  'prefix',
+  'url',
+  'thumbnailURL',
+  'width',
+  'height',
+  'sizes',
+] as const
 
 function hasPrefix(data: Buffer, signature: readonly number[]) {
   return signature.every((byte, index) => data[index] === byte)
@@ -189,6 +201,35 @@ async function validateMediaUploadBeforeOperation({
   return { ...operationArgs, data: { ...incomingData, prefix } }
 }
 
+function preventNoFileMediaIdentityChanges({
+  data,
+  operation,
+  originalDoc,
+  req,
+}: Parameters<NonNullable<NonNullable<CollectionConfig['hooks']>['beforeChange']>[number]>[0]) {
+  if (operation !== 'update' || req.file) return data
+
+  const incomingData = data as Record<string, unknown>
+  const persistedData = originalDoc as Record<string, unknown>
+  const changedFields = serverOwnedMediaFields.filter(
+    (field) =>
+      Object.prototype.hasOwnProperty.call(incomingData, field) &&
+      !isDeepStrictEqual(incomingData[field], persistedData[field]),
+  )
+
+  if (changedFields.length > 0) {
+    throw new ValidationError({
+      errors: changedFields.map((field) => ({
+        message: `${field} can only change when a replacement media file is uploaded.`,
+        path: field,
+      })),
+      req,
+    })
+  }
+
+  return data
+}
+
 export const Media: CollectionConfig = {
   slug: 'media',
   admin: { group: 'Editorial' },
@@ -199,6 +240,7 @@ export const Media: CollectionConfig = {
     delete: editorialOnly,
   },
   hooks: {
+    beforeChange: [preventNoFileMediaIdentityChanges],
     beforeOperation: [validateMediaUploadBeforeOperation],
   },
   upload: {

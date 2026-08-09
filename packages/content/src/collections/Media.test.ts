@@ -35,6 +35,30 @@ function runBeforeOperation({
   } as never)
 }
 
+function runBeforeChange({
+  data = {},
+  file,
+  operation = 'update',
+  originalDoc = {},
+}: {
+  data?: Record<string, unknown>
+  file?: Record<string, unknown>
+  operation?: 'create' | 'update'
+  originalDoc?: Record<string, unknown>
+}) {
+  const hook = Media.hooks?.beforeChange?.[0]
+  return Promise.resolve().then(() =>
+    hook?.({
+      collection: Media,
+      context: {},
+      data,
+      operation,
+      originalDoc,
+      req: { context: {}, file },
+    } as never),
+  )
+}
+
 afterEach(async () => {
   await Promise.all(
     tempDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true })),
@@ -147,6 +171,83 @@ describe('Media collection', () => {
     await expect(
       runBeforeOperation({ data: { alt: 'updated' }, operation: 'update' }),
     ).resolves.toMatchObject({ data: { alt: 'updated', prefix: 'media' } })
+  })
+
+  it.each([
+    ['filename', 'renamed.png'],
+    ['mimeType', 'image/jpeg'],
+    ['filesize', 999],
+    ['prefix', 'other'],
+    ['url', 'https://cdn.example.test/media/renamed.png'],
+    ['thumbnailURL', 'https://cdn.example.test/media/renamed-thumb.png'],
+    ['width', 999],
+    ['height', 999],
+    ['sizes', { thumb: { filename: 'renamed-thumb.png' } }],
+  ])('rejects a no-file update that changes server-owned %s', async (field, value) => {
+    const originalDoc = {
+      filename: 'original.png',
+      filesize: png.length,
+      height: 200,
+      mimeType: 'image/png',
+      prefix: 'media',
+      sizes: { thumb: { filename: 'original-400x400.png' } },
+      thumbnailURL: 'https://cdn.example.test/media/original-400x400.png',
+      url: 'https://cdn.example.test/media/original.png',
+      width: 300,
+    }
+
+    await expect(runBeforeChange({ data: { [field]: value }, originalDoc })).rejects.toMatchObject({
+      data: { errors: [{ path: field }] },
+      status: 400,
+    })
+    expect(originalDoc.url).toBe('https://cdn.example.test/media/original.png')
+  })
+
+  it.each([
+    [{ alt: 'Updated', focalX: 25, focalY: 75 }],
+    [
+      {
+        filename: 'original.png',
+        filesize: png.length,
+        mimeType: 'image/png',
+        prefix: 'media',
+        url: 'https://cdn.example.test/media/original.png',
+      },
+    ],
+  ])('allows no-file metadata/focal edits with omitted or unchanged identity', async (data) => {
+    const originalDoc = {
+      filename: 'original.png',
+      filesize: png.length,
+      mimeType: 'image/png',
+      prefix: 'media',
+      url: 'https://cdn.example.test/media/original.png',
+    }
+
+    await expect(runBeforeChange({ data, originalDoc })).resolves.toEqual(data)
+    expect(originalDoc.url).toBe('https://cdn.example.test/media/original.png')
+  })
+
+  it('allows Payload to change upload identity when an actual replacement file exists', async () => {
+    const data = {
+      filename: 'replacement.png',
+      filesize: png.length,
+      height: 400,
+      mimeType: 'image/png',
+      prefix: 'media',
+      url: 'https://cdn.example.test/media/replacement.png',
+      width: 400,
+    }
+
+    await expect(
+      runBeforeChange({
+        data,
+        file: { data: png, mimetype: 'image/png', name: 'replacement.png', size: png.length },
+        originalDoc: {
+          filename: 'original.png',
+          url: 'https://cdn.example.test/media/original.png',
+        },
+      }),
+    ).resolves.toEqual(data)
   })
 
   it.each(['../media', '..\\media', '%2e%2e%2fmedia', 'media\u0000'])(
