@@ -80,15 +80,19 @@ describe('env schema', () => {
     )
   })
 
-  it('rejects Cloudflare Turnstile test credentials in production', async () => {
+  it.each([
+    '1x0000000000000000000000000000000AA',
+    '2x0000000000000000000000000000000AA',
+    '3x0000000000000000000000000000000AA',
+  ])('rejects documented Turnstile secret test credential %s in production', async (secretKey) => {
     setValidEnv()
-    const mod = await importEnvCase('production-turnstile')
+    const mod = await importEnvCase(`production-turnstile-${secretKey}`)
 
     expect(() =>
       mod.parseServerEnv({
         ...process.env,
         NODE_ENV: 'production',
-        TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
+        TURNSTILE_SECRET_KEY: secretKey,
       }),
     ).toThrow(/test credential/i)
   })

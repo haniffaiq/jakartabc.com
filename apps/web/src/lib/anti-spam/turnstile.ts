@@ -2,6 +2,7 @@ const ENDPOINT = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
 
 type TurnstileResponse = {
   success?: boolean
+  hostname?: string
 }
 
 export async function verifyTurnstile(token: string, remoteip: string): Promise<boolean> {
@@ -11,11 +12,10 @@ export async function verifyTurnstile(token: string, remoteip: string): Promise<
     return false
   }
 
-  if (secret.startsWith('1x000') && token === 'e2e-turnstile-token') {
-    return true
-  }
-
   try {
+    const expectedHostname = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? '').hostname
+    if (!expectedHostname) return false
+
     const params = new URLSearchParams()
     params.set('secret', secret)
     params.set('response', token)
@@ -38,7 +38,7 @@ export async function verifyTurnstile(token: string, remoteip: string): Promise<
 
     const data = (await res.json()) as TurnstileResponse
 
-    return data.success === true
+    return data.success === true && data.hostname === expectedHostname
   } catch {
     return false
   }
