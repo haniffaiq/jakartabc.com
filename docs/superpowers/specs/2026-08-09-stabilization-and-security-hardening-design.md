@@ -132,11 +132,12 @@ against the platform that will ship, not against obsolete framework behavior.
 
 Payload 3.86.0 temporarily retains `image-size@2.0.2`. Only
 `GHSA-w3rx-r6r6-pgpr` and `GHSA-5p2g-fcmc-qvqq` are allowed through
-2026-09-09; the gate fails for any other critical/high advisory or after the
-expiry. The exception is owned by the JakartaBC platform owner and tracked in
-machine-readable metadata with its reason and upstream follow-up. Tasks 3 and
-4 must limit media uploads to JPEG, PNG, and WebP, reject AVIF/HEIF/JXL/ICNS,
-limit writes to admin/editor, and preserve public reads.
+2026-09-09 as an inclusive UTC calendar date; the gate fails for any other
+critical/high advisory and begins rejecting both exceptions at 2026-09-10
+00:00:00 UTC. The exception is owned by the JakartaBC platform owner and
+tracked in machine-readable metadata with its reason and upstream follow-up.
+Tasks 3 and 4 must limit media uploads to JPEG, PNG, and WebP, reject
+AVIF/HEIF/JXL/ICNS, limit writes to admin/editor, and preserve public reads.
 
 ## Authorization model
 
@@ -643,7 +644,8 @@ features that require them according to the policies above.
 
 The stabilization program is accepted only when:
 
-- production audit reports zero critical and zero high findings;
+- production audit reports zero critical and no unapproved high findings; only
+  the two exact `image-size` exceptions may remain through 2026-09-09 UTC;
 - the complete verification command set exits zero;
 - admin/editor/client/anonymous behavior matches the authorization matrix;
 - anonymous direct lead writes are impossible;

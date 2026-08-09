@@ -87,6 +87,14 @@ jobs:
         if: steps.workspace.outputs.present == 'true'
         run: pnpm install --frozen-lockfile
 
+      - name: Production audit policy tests
+        if: steps.workspace.outputs.present == 'true'
+        run: node --test scripts/production-audit-policy.test.mjs
+
+      - name: Production audit gate
+        if: steps.workspace.outputs.present == 'true'
+        run: pnpm audit:prod
+
       - name: Lint
         if: steps.workspace.outputs.present == 'true'
         run: pnpm lint

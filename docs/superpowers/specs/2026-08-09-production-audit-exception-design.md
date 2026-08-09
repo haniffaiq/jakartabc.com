@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-09  
 **Owner:** JakartaBC platform owner  
-**Expiry:** 2026-09-09
+**Expiry:** 2026-09-09 (inclusive UTC calendar date)
 
 ## Purpose
 
@@ -18,6 +18,10 @@ the final pipeline command, so it owns the gate result even though pnpm exits no
 allowed advisories are present. It fails closed on empty, malformed, error-shaped, or incomplete
 audit input. Approval is defined in code as the exact two-advisory set, so adding an entry to the
 metadata cannot broaden the gate silently.
+
+The checker derives the current date from the UTC ISO calendar date. Both exceptions remain
+valid through 2026-09-09 UTC and fail beginning at 2026-09-10 00:00:00 UTC; local runner or
+deployment time zones do not extend or shorten the exception.
 
 A machine-readable policy records each advisory's reason, owner, expiry, and upstream
 follow-up. The checker validates that metadata and the approved mitigation contract before
