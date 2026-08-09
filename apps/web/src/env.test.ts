@@ -1,12 +1,24 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const ORIGINAL = { ...process.env }
-const importEnvCase = (name: string): Promise<typeof import('./env')> =>
-  import(`./env?case=${name}`)
+const importEnvCase = async (_name: string): Promise<typeof import('./env')> => {
+  vi.resetModules()
+  return import('./env')
+}
 
 function setValidEnv(overrides: Record<string, string | undefined> = {}) {
   process.env.DATABASE_URL = 'postgres://u:***@localhost:5432/db'
+  process.env.REDIS_URL = 'redis://redis:6379'
+  process.env.REDIS_KEY_PREFIX = 'jakartabc:test'
+  process.env.MINIO_ENDPOINT = 'http://minio:9000'
+  process.env.MINIO_REGION = 'us-east-1'
+  process.env.MINIO_BUCKET = 'jakartabc'
+  process.env.MINIO_ACCESS_KEY = 'access'
+  process.env.MINIO_SECRET_KEY = 'secret'
+  process.env.MINIO_PUBLIC_URL = 'https://media.example.test/jakartabc'
+  process.env.MINIO_FORCE_PATH_STYLE = 'true'
   process.env.PAYLOAD_SECRET = 'x'.repeat(32)
+  process.env.TRUSTED_PROXY_SECRET = 'proxy-secret-value-that-is-at-least-32-characters'
   process.env.NEXT_PUBLIC_SITE_URL = 'https://example.com'
   process.env.REVALIDATE_SECRET = 'revalidate-secret-value'
   process.env.EMAIL_PROVIDER = 'resend'
@@ -39,6 +51,46 @@ describe('env schema', () => {
     expect(mod.env.EMAIL_PROVIDER).toBe('resend')
     expect(mod.env.RESEND_API_KEY).toBe('resend-key')
     expect(mod.publicEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY).toBe('turnstile-site-key')
+  })
+
+  it('parses the shared infrastructure contract with a strict boolean', async () => {
+    setValidEnv()
+    const mod = await importEnvCase('shared-infrastructure')
+
+    const parsed = mod.parseServerEnv(process.env)
+
+    expect(parsed.REDIS_URL).toBe('redis://redis:6379')
+    expect(parsed.REDIS_KEY_PREFIX).toBe('jakartabc:test')
+    expect(parsed.MINIO_ENDPOINT).toBe('http://minio:9000')
+    expect(parsed.MINIO_REGION).toBe('us-east-1')
+    expect(parsed.MINIO_BUCKET).toBe('jakartabc')
+    expect(parsed.MINIO_ACCESS_KEY).toBe('access')
+    expect(parsed.MINIO_SECRET_KEY).toBe('secret')
+    expect(parsed.MINIO_PUBLIC_URL).toBe('https://media.example.test/jakartabc')
+    expect(parsed.MINIO_FORCE_PATH_STYLE).toBe(true)
+    expect(parsed.TRUSTED_PROXY_SECRET).toHaveLength(49)
+  })
+
+  it('rejects non-literal MinIO boolean values', async () => {
+    setValidEnv()
+    const mod = await importEnvCase('strict-boolean')
+
+    expect(() => mod.parseServerEnv({ ...process.env, MINIO_FORCE_PATH_STYLE: 'TRUE' })).toThrow(
+      /MINIO_FORCE_PATH_STYLE/,
+    )
+  })
+
+  it('rejects Cloudflare Turnstile test credentials in production', async () => {
+    setValidEnv()
+    const mod = await importEnvCase('production-turnstile')
+
+    expect(() =>
+      mod.parseServerEnv({
+        ...process.env,
+        NODE_ENV: 'production',
+        TURNSTILE_SECRET_KEY: '1x0000000000000000000000000000000AA',
+      }),
+    ).toThrow(/test credential/i)
   })
 
   it('accepts SMTP when SMTP credentials are configured', async () => {

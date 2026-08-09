@@ -1,7 +1,25 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [".env", ".env.example"],
-  "globalEnv": ["NODE_ENV", "CI"],
+  "globalEnv": [
+    "NODE_ENV",
+    "CI",
+    "DATABASE_URL",
+    "PAYLOAD_SECRET",
+    "REDIS_URL",
+    "REDIS_KEY_PREFIX",
+    "MINIO_ENDPOINT",
+    "MINIO_REGION",
+    "MINIO_BUCKET",
+    "MINIO_ACCESS_KEY",
+    "MINIO_SECRET_KEY",
+    "MINIO_PUBLIC_URL",
+    "MINIO_FORCE_PATH_STYLE",
+    "TRUSTED_PROXY_SECRET",
+    "TURNSTILE_SECRET_KEY",
+    "PORTAL_COOKIE_DOMAIN",
+    "NEXT_PUBLIC_PORTAL_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
