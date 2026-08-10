@@ -35,15 +35,29 @@ describe('FooterBlock', () => {
   it('applies dark variant as a clearly bounded footer band', () => {
     const { container } = render(<FooterBlock {...props} variant="dark" />)
 
-    expect(container.firstChild).toHaveClass('bg-ink-900')
+    expect(container.firstChild).toHaveClass('bg-navy-900')
     expect(container.firstChild).toHaveClass('text-bone-100')
   })
 
   it('keeps the default light variant on bone with ink text', () => {
     const { container } = render(<FooterBlock {...props} />)
 
-    expect(container.firstChild).toHaveClass('bg-bone-50')
+    expect(container.firstChild).toHaveClass('bg-bone-100')
     expect(container.firstChild).toHaveClass('text-ink-900')
+  })
+
+  it('renders supplied localized section headings', () => {
+    render(
+      <FooterBlock
+        {...props}
+        labels={{ office: 'Kantor', contact: 'Kontak', licenses: 'Perizinan' }}
+      />,
+    )
+
+    expect(screen.getByText('Kantor')).toBeInTheDocument()
+    expect(screen.getByText('Kontak')).toBeInTheDocument()
+    expect(screen.getByText('Perizinan')).toBeInTheDocument()
+    expect(screen.queryByText('Office')).toBeNull()
   })
 
   it('accepts a framework link component for legal links', () => {

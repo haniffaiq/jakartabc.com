@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import * as React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { NavBar } from './NavBar'
@@ -82,6 +83,32 @@ describe('NavBar', () => {
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
+  it('supplies the mobile trigger ref and localized navigation labels', () => {
+    const triggerRef = React.createRef<HTMLButtonElement>()
+
+    render(
+      <NavBar
+        brand="jakartabc"
+        items={items}
+        cta={{ label: 'Pesan', href: '/contact' }}
+        locale="id"
+        onLocaleChange={() => {}}
+        onMobileOpen={() => {}}
+        triggerRef={triggerRef}
+        labels={{
+          navigation: 'Navigasi utama',
+          openMenu: 'Buka menu',
+          switchToEnglish: 'Ganti ke bahasa Inggris',
+          switchToIndonesian: 'Ganti ke bahasa Indonesia',
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('navigation', { name: 'Navigasi utama' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Buka menu' })).toBe(triggerRef.current)
+    expect(screen.getByRole('button', { name: 'Ganti ke bahasa Inggris' })).toBeInTheDocument()
+  })
+
   it('covers DS §20 nav link and CTA state classes', () => {
     render(
       <NavBar
@@ -95,20 +122,19 @@ describe('NavBar', () => {
     )
 
     const servicesLink = screen.getByRole('link', { name: 'Services' })
-    expect(servicesLink.className).toContain('hover:text-ochre-700')
-    expect(servicesLink.className).toContain('active:text-ochre-700')
-    expect(servicesLink.className).toContain('focus-visible:outline-ochre-600')
+    expect(servicesLink.className).toContain('hover:text-navy-700')
+    expect(servicesLink.className).toContain('active:text-navy-800')
+    expect(servicesLink.className).toContain('focus-visible:outline-navy-600')
 
     const ctaLink = screen.getByRole('link', { name: /book a call/i })
-    expect(ctaLink.className).toContain('bg-ochre-600')
-    expect(ctaLink.className).toContain('hover:bg-ochre-700')
-    expect(ctaLink.className).toContain('active:bg-ochre-700')
-    expect(ctaLink.className).toContain('focus-visible:outline-ochre-600')
+    expect(ctaLink.className).toContain('bg-navy-700')
+    expect(ctaLink.className).toContain('hover:bg-navy-800')
+    expect(ctaLink.className).toContain('active:bg-navy-900')
+    expect(ctaLink.className).toContain('focus-visible:outline-navy-600')
 
     const localeToggle = screen.getByRole('button', { name: /switch to indonesian/i })
-    expect(localeToggle.className).toContain('hover:text-ink-900')
-    expect(localeToggle.className).toContain('active:text-ochre-700')
-    expect(localeToggle.className).toContain('focus-visible:outline-ochre-600')
+    expect(localeToggle.className).toContain('hover:text-navy-700')
+    expect(localeToggle.className).toContain('focus-visible:outline-navy-600')
   })
 
   it('uses the injected Link component for locale-aware routing', () => {
