@@ -4,6 +4,7 @@ import { bookingSchema } from './booking'
 
 describe('bookingSchema', () => {
   const valid = {
+    submissionId: '11111111-1111-4111-8111-111111111111',
     name: 'Maria',
     email: 'm@t.co',
     company: 'Solstice',
@@ -33,10 +34,23 @@ describe('bookingSchema', () => {
   })
 
   it('rejects invalid preferredWindows value', () => {
-    expect(() => bookingSchema.parse({ ...valid, preferredWindows: ['sat-am'] as unknown })).toThrow()
+    expect(() =>
+      bookingSchema.parse({ ...valid, preferredWindows: ['sat-am'] as unknown }),
+    ).toThrow()
   })
 
   it('treats hp non-empty as honeypot trigger (parse OK, server rejects)', () => {
     expect(() => bookingSchema.parse({ ...valid, hp: 'spam' })).not.toThrow()
+  })
+
+  it('requires a UUID submissionId', () => {
+    const missingSubmissionId: Partial<typeof valid> = { ...valid }
+    delete missingSubmissionId.submissionId
+
+    expect(bookingSchema.safeParse(missingSubmissionId).success).toBe(false)
+    expect(bookingSchema.safeParse({ ...valid, submissionId: 'not-a-uuid' }).success).toBe(false)
+    expect(bookingSchema.safeParse({ ...valid, submissionId: 'reused-booking-id' }).success).toBe(
+      false,
+    )
   })
 })

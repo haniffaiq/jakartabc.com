@@ -46,6 +46,7 @@ function fd(map: Record<string, string>) {
 }
 
 const validContact = {
+  submissionId: '11111111-1111-4111-8111-111111111111',
   name: 'Sari Wijaya',
   email: 'SARI@EXAMPLE.COM',
   company: 'Jakarta Partners',
@@ -125,6 +126,20 @@ describe('submitContact', () => {
 
   it('rejects invalid contact form data before anti-spam checks', async () => {
     const result = await submitContact(fd({ ...validContact, message: 'short' }), '1.1.1.1')
+
+    expect(result).toEqual({ ok: false, code: 'validation' })
+    expect(mocks.verifyTurnstile).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing', undefined],
+    ['malformed', 'reused-contact-id'],
+  ])('rejects a %s submissionId before anti-spam checks', async (_case, submissionId) => {
+    const form = fd(validContact)
+    if (submissionId === undefined) form.delete('submissionId')
+    else form.set('submissionId', submissionId)
+
+    const result = await submitContact(form, '1.1.1.1')
 
     expect(result).toEqual({ ok: false, code: 'validation' })
     expect(mocks.verifyTurnstile).not.toHaveBeenCalled()

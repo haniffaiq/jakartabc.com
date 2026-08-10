@@ -35,6 +35,8 @@ export function BookingFormWired({
   const turnstileTokenRef = React.useRef('')
   const [turnstileKey, setTurnstileKey] = React.useState(0)
   const [isPending, startTransition] = React.useTransition()
+  const submissionIdRef = React.useRef<string | null>(null)
+  const isSubmittingRef = React.useRef(false)
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '1x00000000000000000000AA'
 
   const setTurnstileToken = React.useCallback((token: string) => {
@@ -59,19 +61,35 @@ export function BookingFormWired({
         errorMessage={errorMessage}
         successMessage={successMessage}
         onSubmit={(formData) => {
+          if (isSubmittingRef.current) return
+
+          isSubmittingRef.current = true
+          submissionIdRef.current ??= crypto.randomUUID()
           const serviceSlug = formData.get('service')
           formData.set('locale', locale)
           formData.set('turnstileToken', turnstileTokenRef.current)
+          formData.set('submissionId', submissionIdRef.current)
           if (typeof serviceSlug === 'string') {
             formData.set('serviceSlug', serviceSlug)
           }
 
           startTransition(async () => {
-            const nextResult = await submitBooking(formData)
-            setResult(nextResult)
-            if (!nextResult.ok) {
+            try {
+              const nextResult = await submitBooking(formData)
+              setResult(nextResult)
+              if (nextResult.ok) {
+                submissionIdRef.current = crypto.randomUUID()
+                return
+              }
+
               setTurnstileToken('')
               setTurnstileKey((key) => key + 1)
+            } catch {
+              setResult({ ok: false, code: 'unknown' })
+              setTurnstileToken('')
+              setTurnstileKey((key) => key + 1)
+            } finally {
+              isSubmittingRef.current = false
             }
           })
         }}

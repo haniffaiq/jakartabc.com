@@ -38,6 +38,7 @@ vi.mock('next/headers', () => ({ headers: headersMock }))
 import { submitBooking } from './booking'
 
 const goodData = new Map<string, string>([
+  ['submissionId', '11111111-1111-4111-8111-111111111111'],
   ['name', 'Maria T'],
   ['email', 'maria@example.co'],
   ['company', 'Solstice'],
@@ -162,6 +163,20 @@ describe('submitBooking', () => {
 
     expect(res.ok).toBe(false)
     if (!res.ok) expect(res.code).toBe('validation')
+    expect(verifyMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing', undefined],
+    ['malformed', 'reused-booking-id'],
+  ])('returns validation for a %s submissionId', async (_case, submissionId) => {
+    const map = new Map(goodData)
+    if (submissionId === undefined) map.delete('submissionId')
+    else map.set('submissionId', submissionId)
+
+    const res = await submitBooking(fd(map))
+
+    expect(res).toEqual({ ok: false, code: 'validation' })
     expect(verifyMock).not.toHaveBeenCalled()
   })
 
