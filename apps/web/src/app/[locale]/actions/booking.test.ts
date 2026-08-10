@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   acquireMock,
+  bookingSubjectMock,
   completeMock,
   createMock,
   findMock,
@@ -16,6 +17,7 @@ const {
   verifyMock,
 } = vi.hoisted(() => ({
   acquireMock: vi.fn(),
+  bookingSubjectMock: vi.fn(),
   completeMock: vi.fn(),
   createMock: vi.fn(),
   findMock: vi.fn(),
@@ -53,7 +55,7 @@ vi.mock('@jakartabc/email/templates/BookingLeadVisitor', () => ({
 }))
 vi.mock('@jakartabc/email/i18n', () => ({
   subjects: {
-    bookingLeadSales: vi.fn((service: string, name: string) => `Booking: ${service} — ${name}`),
+    bookingLeadSales: bookingSubjectMock,
     bookingLeadVisitor: {
       en: 'We received your booking request',
       id: 'Kami menerima permintaan konsultasi Anda',
@@ -97,12 +99,25 @@ function bookingRow(deliveryStatus: 'pending' | 'sent' | 'failed' = 'sent', deli
     submissionId: SUBMISSION_ID,
     deliveryStatus,
     deliveryAttempts,
+    name: 'Maria T',
+    email: 'maria@example.co',
+    company: 'Solstice',
+    phone: '+81-1',
+    service: { id: 1, name: 'Canonical PT PMA Setup' },
+    preferredWindows: ['mon-am', 'tue-pm'],
+    message: 'Hello, I would like to set up a PT PMA.',
+    locale: 'en',
   }
+}
+
+function renderedProps(index: number) {
+  const calls = renderMock.mock.calls as unknown as Array<[{ props: Record<string, unknown> }]>
+  return calls[index]?.[0].props
 }
 
 describe('submitBooking', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
 
     payloadClientMock.mockResolvedValue({ create: createMock, find: findMock, update: updateMock })
     findMock.mockImplementation(async ({ collection }: { collection: string }) =>
@@ -115,6 +130,10 @@ describe('submitBooking', () => {
     acquireMock.mockResolvedValue({ state: 'acquired', lease: LEASE })
     completeMock.mockResolvedValue({ state: 'completed' })
     releaseMock.mockResolvedValue({ state: 'released' })
+    renderMock.mockResolvedValue('<html>Email</html>')
+    bookingSubjectMock.mockImplementation(
+      (service: string, name: string) => `Booking: ${service} — ${name}`,
+    )
     sendMock.mockResolvedValue({ ok: true, id: 'm_1' })
     createMock.mockResolvedValue(bookingRow('pending', 0))
     updateMock.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
@@ -140,14 +159,15 @@ describe('submitBooking', () => {
     expect(legacyRateLimitMock).not.toHaveBeenCalled()
     expect(acquireMock).toHaveBeenCalledWith(SUBMISSION_ID)
     expect(findMock).toHaveBeenNthCalledWith(1, {
-      collection: 'services',
-      where: { slug: { equals: 'pt-pma-setup' } },
-      limit: 1,
-      overrideAccess: true,
-    })
-    expect(findMock).toHaveBeenNthCalledWith(2, {
       collection: 'booking-leads',
       where: { submissionId: { equals: SUBMISSION_ID } },
+      limit: 1,
+      overrideAccess: true,
+      depth: 1,
+    })
+    expect(findMock).toHaveBeenNthCalledWith(2, {
+      collection: 'services',
+      where: { slug: { equals: 'pt-pma-setup' } },
       limit: 1,
       overrideAccess: true,
     })
@@ -202,6 +222,20 @@ describe('submitBooking', () => {
     expect(sendMock).toHaveBeenCalledTimes(2)
     expect(sendMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ to: 'sales@example.co' }))
     expect(sendMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ to: 'maria@example.co' }))
+    expect(sendMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        to: 'sales@example.co',
+        subject: 'Booking: Canonical PT PMA Setup — Maria T',
+      }),
+    )
+    expect(sendMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        to: 'maria@example.co',
+        subject: 'We received your booking request',
+      }),
+    )
     expect(completeMock).toHaveBeenCalledWith(LEASE)
     expect(updateMock.mock.invocationCallOrder[1]).toBeLessThan(
       sendMock.mock.invocationCallOrder[1] ?? Infinity,
@@ -323,28 +357,29 @@ describe('submitBooking', () => {
       where: { submissionId: { equals: SUBMISSION_ID } },
       limit: 1,
       overrideAccess: true,
+      depth: 1,
     })
     expect(sendMock).not.toHaveBeenCalled()
     expect(createMock).not.toHaveBeenCalled()
   })
 
   it('distinguishes a confirmed unknown service from lookup infrastructure failure', async () => {
-    findMock.mockResolvedValueOnce({ docs: [] })
+    findMock.mockResolvedValueOnce({ docs: [] }).mockResolvedValueOnce({ docs: [] })
 
     expect(await submitBooking(fd())).toEqual({ ok: false, code: 'service-unknown' })
     expect(releaseMock).toHaveBeenCalledWith(LEASE)
     expect(createMock).not.toHaveBeenCalled()
 
-    findMock.mockRejectedValueOnce(new Error('postgres://admin:secret@db'))
+    findMock
+      .mockResolvedValueOnce({ docs: [] })
+      .mockRejectedValueOnce(new Error('postgres://admin:secret@db'))
     expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
     expect(releaseMock).toHaveBeenCalledTimes(2)
     expect(createMock).not.toHaveBeenCalled()
   })
 
   it('reconciles an existing row without sending either email again', async () => {
-    findMock
-      .mockResolvedValueOnce({ docs: [{ id: 1, name: 'PT PMA Setup' }] })
-      .mockResolvedValueOnce({ docs: [bookingRow('sent', 1)] })
+    findMock.mockResolvedValueOnce({ docs: [bookingRow('sent', 1)] })
 
     expect(await submitBooking(fd())).toEqual({
       ok: true,
@@ -359,9 +394,7 @@ describe('submitBooking', () => {
 
   it('keeps an ambiguous existing pending row neutral and emits only a structured audit event', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    findMock
-      .mockResolvedValueOnce({ docs: [{ id: 1, name: 'PT PMA Setup' }] })
-      .mockResolvedValueOnce({ docs: [bookingRow('pending', 1)] })
+    findMock.mockResolvedValueOnce({ docs: [bookingRow('pending', 1)] })
 
     try {
       expect(await submitBooking(fd())).toEqual({
@@ -382,9 +415,7 @@ describe('submitBooking', () => {
   })
 
   it('safely resumes an existing pending row before its first owner attempt', async () => {
-    findMock
-      .mockResolvedValueOnce({ docs: [{ id: 1, name: 'PT PMA Setup' }] })
-      .mockResolvedValueOnce({ docs: [bookingRow('pending', 0)] })
+    findMock.mockResolvedValueOnce({ docs: [bookingRow('pending', 0)] })
 
     expect(await submitBooking(fd())).toEqual({
       ok: true,
@@ -407,20 +438,31 @@ describe('submitBooking', () => {
     expect(completeMock).toHaveBeenCalledWith(LEASE)
   })
 
-  it('retries a stranded row after its original pending update failed before owner send', async () => {
-    const service = { docs: [{ id: 1, name: 'PT PMA Setup' }] }
+  it('hydrates a stranded retry only from persisted row A when FormData B reuses its UUID', async () => {
+    const serviceA = { docs: [{ id: 1, name: 'PT PMA Setup' }] }
     findMock
-      .mockResolvedValueOnce(service)
       .mockResolvedValueOnce({ docs: [] })
-      .mockResolvedValueOnce(service)
+      .mockResolvedValueOnce(serviceA)
       .mockResolvedValueOnce({ docs: [bookingRow('pending', 0)] })
     updateMock.mockRejectedValueOnce(new Error('database unavailable before owner send'))
+
+    const changed = new Map(goodData)
+    changed.set('name', 'Mallory B')
+    changed.set('email', 'mallory-b@example.net')
+    changed.set('company', 'Injected Company B')
+    changed.set('phone', '+62-999-B')
+    changed.set('serviceSlug', 'untrusted-service-b')
+    changed.set('message', 'Changed valid message B must never enter persisted row A mail.')
+    changed.set('locale', 'id')
+    const changedForm = fd(changed)
+    changedForm.delete('preferredWindows')
+    changedForm.append('preferredWindows', 'fri-pm')
 
     expect(await submitBooking(fd())).toEqual({
       ok: false,
       code: 'temporarily-unavailable',
     })
-    expect(await submitBooking(fd())).toEqual({
+    expect(await submitBooking(changedForm)).toEqual({
       ok: true,
       submissionId: SUBMISSION_ID,
       delivery: 'sent',
@@ -429,6 +471,114 @@ describe('submitBooking', () => {
     expect(releaseMock).toHaveBeenCalledTimes(1)
     expect(sendMock.mock.calls.filter(([mail]) => mail.to === 'sales@example.co')).toHaveLength(1)
     expect(completeMock).toHaveBeenCalledTimes(1)
+
+    const ownerRenderProps = renderedProps(0)
+    const visitorRenderProps = renderedProps(1)
+    expect(ownerRenderProps).toMatchObject({
+      name: 'Maria T',
+      email: 'maria@example.co',
+      company: 'Solstice',
+      phone: '+81-1',
+      service: 'Canonical PT PMA Setup',
+      preferredWindows: ['mon-am', 'tue-pm'],
+      message: 'Hello, I would like to set up a PT PMA.',
+      locale: 'en',
+    })
+    expect(visitorRenderProps).toMatchObject({
+      name: 'Maria T',
+      service: 'Canonical PT PMA Setup',
+      locale: 'en',
+    })
+    expect(sendMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ to: 'maria@example.co' }))
+    expect(
+      JSON.stringify({ render: renderMock.mock.calls, send: sendMock.mock.calls }),
+    ).not.toMatch(
+      /Mallory B|mallory-b@example\.net|Injected Company B|\+62-999-B|Untrusted Service B|Changed valid message B|fri-pm/,
+    )
+    expect(findMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'services',
+        where: { slug: { equals: 'untrusted-service-b' } },
+      }),
+    )
+  })
+
+  it('hydrates create-race recovery mail from the raced persisted booking row', async () => {
+    findMock
+      .mockResolvedValueOnce({ docs: [] })
+      .mockResolvedValueOnce({ docs: [{ id: 1, name: 'Lookup Service Must Not Win' }] })
+      .mockResolvedValueOnce({ docs: [bookingRow('pending', 0)] })
+    createMock.mockRejectedValueOnce(new Error('unique submission ID conflict'))
+
+    const racedFormData = new Map(goodData)
+    racedFormData.set('name', 'Race Form B')
+    racedFormData.set('email', 'race-b@example.net')
+    racedFormData.set('company', 'Race Company B')
+    racedFormData.set('phone', '+62-RACE-B')
+    racedFormData.set('message', 'Valid raced FormData B must not enter persisted row A mail.')
+    racedFormData.set('locale', 'id')
+    const racedForm = fd(racedFormData)
+    racedForm.delete('preferredWindows')
+    racedForm.append('preferredWindows', 'fri-am')
+
+    expect(await submitBooking(racedForm)).toEqual({
+      ok: true,
+      submissionId: SUBMISSION_ID,
+      delivery: 'sent',
+    })
+    expect(renderedProps(0)).toMatchObject({
+      name: 'Maria T',
+      email: 'maria@example.co',
+      company: 'Solstice',
+      phone: '+81-1',
+      service: 'Canonical PT PMA Setup',
+      preferredWindows: ['mon-am', 'tue-pm'],
+      message: 'Hello, I would like to set up a PT PMA.',
+      locale: 'en',
+    })
+    expect(
+      JSON.stringify({ render: renderMock.mock.calls, send: sendMock.mock.calls }),
+    ).not.toMatch(
+      /Race Form B|race-b@example\.net|Race Company B|\+62-RACE-B|Valid raced FormData B|fri-am/,
+    )
+  })
+
+  it('fails closed without mail when persisted pending data cannot be safely hydrated', async () => {
+    findMock.mockResolvedValueOnce({
+      docs: [{ ...bookingRow('pending', 0), service: 1 }],
+    })
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(releaseMock).toHaveBeenCalledWith(LEASE)
+  })
+
+  it('hydrates canonical nullable optional fields without falling back to FormData', async () => {
+    findMock.mockResolvedValueOnce({
+      docs: [
+        {
+          ...bookingRow('pending', 0),
+          company: null,
+          phone: null,
+          preferredWindows: null,
+        },
+      ],
+    })
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: true,
+      submissionId: SUBMISSION_ID,
+      delivery: 'sent',
+    })
+    expect(renderedProps(0)).toMatchObject({
+      company: '',
+      phone: '',
+      preferredWindows: [],
+    })
   })
 
   it('creates one row and sends one owner email for concurrent identical submissions', async () => {

@@ -46,6 +46,14 @@ type BookingLeadDoc = {
   submissionId?: string | null
   deliveryStatus?: unknown
   deliveryAttempts?: unknown
+  name?: unknown
+  email?: unknown
+  company?: unknown
+  phone?: unknown
+  service?: unknown
+  preferredWindows?: unknown
+  message?: unknown
+  locale?: unknown
 }
 
 type PayloadBookingClient = {
@@ -54,10 +62,13 @@ type PayloadBookingClient = {
     where: Record<string, { equals: string }>
     limit: number
     overrideAccess: true
+    depth?: number
   }) => Promise<{ docs: Array<ServiceDoc | BookingLeadDoc> }>
   create: (args: {
     collection: 'booking-leads'
     overrideAccess: true
+    depth: number
+    locale: 'en' | 'id'
     data: Record<string, unknown>
   }) => Promise<BookingLeadDoc>
   update: (args: {
@@ -67,6 +78,21 @@ type PayloadBookingClient = {
     data: DeliveryTransition
   }) => Promise<BookingLeadDoc>
 }
+
+const persistedBookingMailSchema = bookingSchema.pick({
+  name: true,
+  email: true,
+  company: true,
+  phone: true,
+  preferredWindows: true,
+  message: true,
+  locale: true,
+})
+
+type BookingMailData = Pick<
+  BookingInput,
+  'name' | 'email' | 'company' | 'phone' | 'preferredWindows' | 'message' | 'locale'
+>
 
 function formDataToBookingObject(formData: FormData): Record<string, unknown> {
   return {
@@ -91,6 +117,42 @@ function deliveryState(document: BookingLeadDoc): DeliveryStatus | null {
 
 function canResumeBeforeOwnerAttempt(document: BookingLeadDoc) {
   return deliveryState(document) === 'pending' && document.deliveryAttempts === 0
+}
+
+function hydratePersistedBookingMail(
+  document: BookingLeadDoc,
+): { data: BookingMailData; serviceName: string } | null {
+  try {
+    const parsed = persistedBookingMailSchema.safeParse({
+      name: document.name,
+      email: document.email,
+      company: document.company ?? '',
+      phone: document.phone ?? '',
+      preferredWindows: document.preferredWindows ?? [],
+      message: document.message,
+      locale: document.locale,
+    })
+    if (!parsed.success || typeof document.service !== 'object' || document.service === null) {
+      return null
+    }
+
+    const service = document.service as Record<string, unknown>
+    const serviceId = service.id
+    const serviceName = service.name
+    if (
+      (typeof serviceId !== 'string' && typeof serviceId !== 'number') ||
+      (typeof serviceId === 'string' && serviceId.trim().length === 0) ||
+      (typeof serviceId === 'number' && (!Number.isSafeInteger(serviceId) || serviceId <= 0)) ||
+      typeof serviceName !== 'string' ||
+      serviceName.trim().length === 0
+    ) {
+      return null
+    }
+
+    return { data: parsed.data, serviceName: serviceName.trim() }
+  } catch {
+    return null
+  }
 }
 
 async function releaseLease(lease: SubmissionLease) {
@@ -120,6 +182,7 @@ async function findBookingBySubmissionId(
     where: { submissionId: { equals: submissionId } },
     limit: 1,
     overrideAccess: true,
+    depth: 1,
   })
   return result.docs[0] as BookingLeadDoc | undefined
 }
@@ -131,7 +194,7 @@ function ownerMail({
   serviceName,
   siteUrl,
 }: {
-  data: BookingInput
+  data: BookingMailData
   leadId: string | number
   salesEmail: string
   serviceName: string
@@ -182,7 +245,7 @@ async function sendVisitorMail({
   salesEmail,
   serviceName,
 }: {
-  data: BookingInput
+  data: BookingMailData
   salesEmail: string
   serviceName: string
 }) {
@@ -289,27 +352,6 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   }
 
   const lease = acquisition.lease
-  let service: ServiceDoc | undefined
-  try {
-    const services = await payload.find({
-      collection: 'services',
-      where: { slug: { equals: data.serviceSlug } },
-      limit: 1,
-      overrideAccess: true,
-    })
-    service = services.docs[0] as ServiceDoc | undefined
-  } catch {
-    await releaseLease(lease)
-    return operationalFailure(data.submissionId, 'service-lookup-failed')
-  }
-
-  if (!service) {
-    if (!(await releaseLease(lease))) {
-      return operationalFailure(data.submissionId, 'idempotency-release-failed')
-    }
-    return { ok: false, code: 'service-unknown' }
-  }
-
   let existing: BookingLeadDoc | undefined
   try {
     existing = await findBookingBySubmissionId(payload, data.submissionId)
@@ -323,10 +365,33 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   }
 
   if (!lead) {
+    let service: ServiceDoc | undefined
+    try {
+      const services = await payload.find({
+        collection: 'services',
+        where: { slug: { equals: data.serviceSlug } },
+        limit: 1,
+        overrideAccess: true,
+      })
+      service = services.docs[0] as ServiceDoc | undefined
+    } catch {
+      await releaseLease(lease)
+      return operationalFailure(data.submissionId, 'service-lookup-failed')
+    }
+
+    if (!service) {
+      if (!(await releaseLease(lease))) {
+        return operationalFailure(data.submissionId, 'idempotency-release-failed')
+      }
+      return { ok: false, code: 'service-unknown' }
+    }
+
     try {
       lead = await payload.create({
         collection: 'booking-leads',
         overrideAccess: true,
+        depth: 1,
+        locale: data.locale,
         data: {
           submissionId: data.submissionId,
           name: data.name,
@@ -363,6 +428,12 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
     }
   }
 
+  const persistedMail = hydratePersistedBookingMail(lead)
+  if (!persistedMail) {
+    await releaseLease(lease)
+    return operationalFailure(data.submissionId, 'persisted-booking-hydration-failed')
+  }
+
   const attemptedAt = new Date()
   const pending = beginDeliveryAttempt(0, attemptedAt)
   try {
@@ -377,16 +448,15 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
     return operationalFailure(data.submissionId, 'delivery-pending-persist-failed')
   }
 
-  const serviceName = service.name ?? service.title ?? data.serviceSlug
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'
   let clockCalls = 0
   const delivery = await attemptDelivery({
     currentAttempts: 0,
     send: ownerMail({
-      data,
+      data: persistedMail.data,
       leadId: lead.id,
       salesEmail,
-      serviceName,
+      serviceName: persistedMail.serviceName,
       siteUrl,
     }),
     clock: () => (clockCalls++ === 0 ? attemptedAt : new Date()),
@@ -410,7 +480,11 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   }
 
   try {
-    await sendVisitorMail({ data, salesEmail, serviceName })
+    await sendVisitorMail({
+      data: persistedMail.data,
+      salesEmail,
+      serviceName: persistedMail.serviceName,
+    })
   } catch {
     console.warn('[booking] visitor-delivery-failed', { submissionId: data.submissionId })
   }
