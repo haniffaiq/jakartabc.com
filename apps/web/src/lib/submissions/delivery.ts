@@ -1,5 +1,9 @@
+import type { SendResult } from '@jakartabc/email'
+
 const DELIVERY_ERROR_EVENT = 'delivery.provider-send-failed'
 const MAX_DELIVERY_ERROR_LENGTH = 500
+const DATE_GET_TIME = Date.prototype.getTime
+const DATE_TO_ISO_STRING = Date.prototype.toISOString
 
 const SAFE_ERROR_NAMES = new Set([
   'AbortError',
@@ -53,10 +57,13 @@ export type DeliveryAttemptResult = Readonly<{
 export type DeliveryClock = () => Date
 
 function validTimestamp(value: Date) {
-  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+  try {
+    const time = Reflect.apply(DATE_GET_TIME, value, []) as number
+    if (!Number.isFinite(time)) throw new Error('Invalid delivery timestamp')
+    return Reflect.apply(DATE_TO_ISO_STRING, value, []) as string
+  } catch {
     throw new Error('Invalid delivery timestamp')
   }
-  return value.toISOString()
 }
 
 function providerErrorClass(error: unknown) {
@@ -98,8 +105,9 @@ export function completeDeliveryAttempt(
   deliveredAt: Date,
 ): SentDeliveryTransition {
   return Object.freeze({
-    ...pending,
     deliveryStatus: 'sent',
+    deliveryAttempts: pending.deliveryAttempts,
+    lastDeliveryAttemptAt: pending.lastDeliveryAttemptAt,
     deliveredAt: validTimestamp(deliveredAt),
     deliveryError: null,
   })
@@ -110,8 +118,9 @@ export function failDeliveryAttempt(
   error: unknown,
 ): FailedDeliveryTransition {
   return Object.freeze({
-    ...pending,
     deliveryStatus: 'failed',
+    deliveryAttempts: pending.deliveryAttempts,
+    lastDeliveryAttemptAt: pending.lastDeliveryAttemptAt,
     deliveredAt: null,
     deliveryError: sanitizeDeliveryError(error),
   })
@@ -123,13 +132,19 @@ export async function attemptDelivery({
   clock = () => new Date(),
 }: {
   currentAttempts: number
-  send: () => Promise<unknown>
+  send: () => Promise<SendResult>
   clock?: DeliveryClock
 }): Promise<DeliveryAttemptResult> {
   const pending = beginDeliveryAttempt(currentAttempts, clock())
 
   try {
-    await send()
+    const result = await send()
+    if (!result.ok) {
+      return Object.freeze({
+        pending,
+        final: failDeliveryAttempt(pending, result.error),
+      })
+    }
   } catch (error) {
     return Object.freeze({
       pending,

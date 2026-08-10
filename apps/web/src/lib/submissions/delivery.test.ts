@@ -12,6 +12,14 @@ const ATTEMPTED_AT = new Date('2026-08-10T01:02:03.000Z')
 const DELIVERED_AT = new Date('2026-08-10T01:02:04.000Z')
 
 describe('delivery transitions', () => {
+  const transitionKeys = [
+    'deliveryStatus',
+    'deliveryAttempts',
+    'lastDeliveryAttemptAt',
+    'deliveredAt',
+    'deliveryError',
+  ]
+
   it('builds immutable pending and sent transitions with deterministic timestamps', () => {
     const pending = beginDeliveryAttempt(2, ATTEMPTED_AT)
     const sent = completeDeliveryAttempt(pending, DELIVERED_AT)
@@ -48,6 +56,70 @@ describe('delivery transitions', () => {
     expect(() => beginDeliveryAttempt(0, new Date('invalid'))).toThrowError(
       'Invalid delivery timestamp',
     )
+  })
+
+  it('uses Date intrinsics without invoking hostile instance overrides', () => {
+    const timestamp = new Date('2026-08-10T05:06:07.000Z')
+    const hostileGetTime = vi.fn(() => {
+      throw new Error('getTime secret')
+    })
+    const hostileToISOString = vi.fn(() => {
+      throw new Error('toISOString secret')
+    })
+    Object.defineProperties(timestamp, {
+      getTime: { value: hostileGetTime },
+      toISOString: { value: hostileToISOString },
+    })
+
+    expect(beginDeliveryAttempt(0, timestamp).lastDeliveryAttemptAt).toBe(
+      '2026-08-10T05:06:07.000Z',
+    )
+    expect(hostileGetTime).not.toHaveBeenCalled()
+    expect(hostileToISOString).not.toHaveBeenCalled()
+  })
+
+  it('fails closed with a stable error for a hostile Date proxy', () => {
+    const timestamp = new Proxy(ATTEMPTED_AT, {
+      get() {
+        throw new Error('date getter secret')
+      },
+      getPrototypeOf() {
+        throw new Error('date prototype secret')
+      },
+    })
+
+    expect(() => beginDeliveryAttempt(0, timestamp)).toThrowError('Invalid delivery timestamp')
+  })
+
+  it('copies only whitelisted transition keys from a record-like pending value', () => {
+    const extraGetter = vi.fn(() => 'customer-secret')
+    const symbolGetter = vi.fn(() => 'token-secret')
+    const secretSymbol = Symbol('provider-secret')
+    const recordLike = {
+      deliveryStatus: 'pending' as const,
+      deliveryAttempts: 3,
+      lastDeliveryAttemptAt: ATTEMPTED_AT.toISOString(),
+      deliveredAt: null,
+      deliveryError: null,
+      id: 'lead-123',
+      nested: { customer: 'private' },
+    }
+    Object.defineProperties(recordLike, {
+      providerPayload: { enumerable: true, get: extraGetter },
+      [secretSymbol]: { enumerable: true, get: symbolGetter },
+      cycle: { enumerable: true, value: recordLike },
+    })
+
+    const sent = completeDeliveryAttempt(recordLike, DELIVERED_AT)
+    const failed = failDeliveryAttempt(recordLike, new Error('provider secret'))
+
+    expect(Reflect.ownKeys(beginDeliveryAttempt(0, ATTEMPTED_AT))).toEqual(transitionKeys)
+    expect(Reflect.ownKeys(sent)).toEqual(transitionKeys)
+    expect(Reflect.ownKeys(failed)).toEqual(transitionKeys)
+    expect(extraGetter).not.toHaveBeenCalled()
+    expect(symbolGetter).not.toHaveBeenCalled()
+    expect(JSON.stringify(sent)).not.toContain('customer-secret')
+    expect(JSON.stringify(failed)).not.toContain('token-secret')
   })
 })
 
@@ -112,7 +184,7 @@ describe('delivery error sanitizing', () => {
 
 describe('attemptDelivery', () => {
   it('returns pending and sent transitions after successful send', async () => {
-    const send = vi.fn().mockResolvedValue(undefined)
+    const send = vi.fn().mockResolvedValue({ ok: true, id: 'message-123' })
     const times = [ATTEMPTED_AT, DELIVERED_AT]
     const clock = vi.fn(() => times.shift() ?? DELIVERED_AT)
 
@@ -157,8 +229,30 @@ describe('attemptDelivery', () => {
     expect(Object.isFrozen(result)).toBe(true)
   })
 
+  it('treats a resolved SendResult failure as failed without leaking its error', async () => {
+    const send = vi.fn().mockResolvedValue({
+      ok: false,
+      error: 'visitor@example.com Bearer raw-token https://user:pass@example.test/?api_key=secret',
+    })
+    const clock = vi.fn(() => ATTEMPTED_AT)
+
+    const result = await attemptDelivery({ currentAttempts: 7, send, clock })
+
+    expect(result.final).toEqual({
+      deliveryStatus: 'failed',
+      deliveryAttempts: 8,
+      lastDeliveryAttemptAt: ATTEMPTED_AT.toISOString(),
+      deliveredAt: null,
+      deliveryError: 'delivery.provider-send-failed|ProviderError',
+    })
+    expect(result.final.deliveryError).not.toContain('visitor@example.com')
+    expect(result.final.deliveryError).not.toContain('raw-token')
+    expect(result.final.deliveryError).not.toContain('api_key')
+    expect(clock).toHaveBeenCalledOnce()
+  })
+
   it('does not misclassify an invalid completion clock as a provider failure', async () => {
-    const send = vi.fn().mockResolvedValue(undefined)
+    const send = vi.fn().mockResolvedValue({ ok: true, id: 'message-123' })
     const times = [ATTEMPTED_AT, new Date('invalid')]
 
     await expect(
