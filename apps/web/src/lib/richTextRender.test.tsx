@@ -83,6 +83,37 @@ describe('RichTextRender', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Section heading' })).toHaveClass('mt-16')
   })
 
+  it.each([
+    ['h1', 1, 'text-display-lg'],
+    ['h2', 2, 'text-display-md'],
+    ['h3', 3, 'text-display-md'],
+    ['h4', 4, 'text-heading-lg'],
+    ['h5', 5, 'text-heading-md'],
+    ['h6', 6, 'text-body-lg'],
+  ] as const)('preserves %s heading semantics', (tag, level, sizeClass) => {
+    render(
+      <RichTextRender
+        content={editorState([
+          {
+            children: [text(`${tag} heading`)],
+            direction: null,
+            format: '',
+            indent: 0,
+            tag,
+            type: 'heading',
+            version: 1,
+          },
+        ])}
+        regulations={[]}
+      />,
+    )
+
+    expect(screen.getByRole('heading', { level, name: `${tag} heading` })).toHaveClass(
+      sizeClass,
+      'font-display',
+    )
+  })
+
   it('renders ordered, unordered, and nested lists plus blockquotes through Payload converters', () => {
     render(
       <RichTextRender
@@ -200,6 +231,111 @@ describe('RichTextRender', () => {
       'Unsafe source',
     )
     expect(screen.queryByRole('link', { name: 'Unsafe source' })).not.toBeInTheDocument()
+  })
+
+  it('resolves approved populated internal documents without trusting a custom URL', () => {
+    render(
+      <RichTextRender
+        content={editorState([
+          {
+            children: [
+              {
+                children: [text('Insight document')],
+                fields: {
+                  doc: {
+                    relationTo: 'insights',
+                    value: { id: 11, slug: 'market-entry-update' },
+                  },
+                  linkType: 'internal',
+                  url: 'https://evil.test/origin-confusion',
+                },
+                type: 'link',
+                version: 3,
+              },
+              text(' and '),
+              {
+                children: [text('Service document')],
+                fields: {
+                  doc: {
+                    relationTo: 'services',
+                    value: { id: 22, slug: 'pt-pma-setup' },
+                  },
+                  linkType: 'internal',
+                },
+                type: 'link',
+                version: 3,
+              },
+            ],
+            direction: null,
+            format: '',
+            indent: 0,
+            type: 'paragraph',
+            version: 1,
+          },
+        ])}
+        regulations={[]}
+      />,
+    )
+
+    expect(screen.getByRole('link', { name: 'Insight document' })).toHaveAttribute(
+      'href',
+      '/insights/market-entry-update',
+    )
+    expect(screen.getByRole('link', { name: 'Service document' })).toHaveAttribute(
+      'href',
+      '/services/pt-pma-setup',
+    )
+    expect(document.querySelector('a[href^="https://evil.test"]')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['unpopulated document ID', { relationTo: 'insights', value: 11 }],
+    [
+      'unsupported document collection',
+      { relationTo: 'authors', value: { id: 12, slug: 'ayu-pratama' } },
+    ],
+    [
+      'unsafe document slug',
+      { relationTo: 'insights', value: { id: 13, slug: 'https://evil.test/confused' } },
+    ],
+    [
+      'path-traversing document slug',
+      { relationTo: 'services', value: { id: 14, slug: '../pricing' } },
+    ],
+    [
+      'unsafe document target',
+      { relationTo: 'https://evil.test', value: { id: 15, slug: 'market-entry' } },
+    ],
+  ])('leaves %s visible but non-interactive', (label, doc) => {
+    render(
+      <RichTextRender
+        content={editorState([
+          {
+            children: [
+              {
+                children: [text(label)],
+                fields: {
+                  doc,
+                  linkType: 'internal',
+                  url: 'https://evil.test/fallback',
+                },
+                type: 'link',
+                version: 3,
+              },
+            ],
+            direction: null,
+            format: '',
+            indent: 0,
+            type: 'paragraph',
+            version: 1,
+          },
+        ])}
+        regulations={[]}
+      />,
+    )
+
+    expect(screen.getByText(label)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: label })).not.toBeInTheDocument()
   })
 
   it('renders safe uploads and populated relationships without activating unsafe URLs', () => {

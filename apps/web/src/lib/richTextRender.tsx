@@ -23,6 +23,9 @@ type Regulation = {
 type UnknownRecord = Record<string, unknown>
 type ConverterArgs = JSXConverterArgs<SerializedLexicalNode & UnknownRecord>
 
+const CONTENT_SLUG_MAX_LENGTH = 128
+const CONTENT_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null
 }
@@ -55,10 +58,30 @@ function nodeDescription(node: UnknownRecord): string {
   return stringValue(node.type) ?? 'unknown'
 }
 
+function internalDocumentHref(fields: UnknownRecord): string | null {
+  const doc = isRecord(fields.doc) ? fields.doc : null
+  if (!doc || !isRecord(doc.value)) return null
+
+  const basePath =
+    doc.relationTo === 'insights' ? '/insights' : doc.relationTo === 'services' ? '/services' : null
+  const slug = stringValue(doc.value.slug)
+
+  if (!basePath || !slug || slug.length > CONTENT_SLUG_MAX_LENGTH || !CONTENT_SLUG.test(slug)) {
+    return null
+  }
+
+  return safeHref(`${basePath}/${slug}`)
+}
+
 function linkConverter({ node, nodesToJSX }: ConverterArgs): React.ReactNode {
   const fields = isRecord(node.fields) ? node.fields : {}
   const children = nodesToJSX({ nodes: Array.isArray(node.children) ? node.children : [] })
-  const href = safeHref(fields.url)
+  const href =
+    fields.linkType === 'internal'
+      ? internalDocumentHref(fields)
+      : fields.linkType === 'custom' || node.type === 'autolink'
+        ? safeHref(fields.url)
+        : null
 
   if (!href) return <>{children}</>
 
@@ -186,12 +209,51 @@ function createConverters(regulations: Regulation[]): JSXConvertersFunction {
         )
       },
       heading: ({ node, nodesToJSX }: ConverterArgs) => {
-        const tag = node.tag === 'h3' ? 'h3' : 'h2'
-        return (
-          <DisplayHeading as={tag} size="md" className="mt-16">
-            {nodesToJSX({ nodes: Array.isArray(node.children) ? node.children : [] })}
-          </DisplayHeading>
-        )
+        const children = nodesToJSX({
+          nodes: Array.isArray(node.children) ? node.children : [],
+        })
+
+        if (node.tag === 'h2' || node.tag === 'h3') {
+          return (
+            <DisplayHeading as={node.tag} size="md" className="mt-16">
+              {children}
+            </DisplayHeading>
+          )
+        }
+
+        if (node.tag === 'h1') {
+          return (
+            <h1 className="mt-16 text-balance font-display text-display-lg font-normal leading-[1.1] text-ink-900">
+              {children}
+            </h1>
+          )
+        }
+
+        if (node.tag === 'h4') {
+          return (
+            <h4 className="mt-12 text-balance font-display text-heading-lg font-medium text-ink-900">
+              {children}
+            </h4>
+          )
+        }
+
+        if (node.tag === 'h5') {
+          return (
+            <h5 className="mt-12 text-balance font-display text-heading-md font-medium text-ink-900">
+              {children}
+            </h5>
+          )
+        }
+
+        if (node.tag === 'h6') {
+          return (
+            <h6 className="mt-12 text-balance font-display text-body-lg font-medium text-ink-900">
+              {children}
+            </h6>
+          )
+        }
+
+        return <UnknownRichTextNode description={`heading:${String(node.tag ?? 'unknown')}`} />
       },
       autolink: linkConverter,
       link: linkConverter,
