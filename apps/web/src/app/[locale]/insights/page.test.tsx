@@ -2,12 +2,13 @@ import React from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { findMock } = vi.hoisted(() => ({
+const { cacheMock, findMock } = vi.hoisted(() => ({
+  cacheMock: vi.fn((fn: () => unknown) => fn),
   findMock: vi.fn(),
 }))
 
 vi.mock('next/cache', () => ({
-  unstable_cache: (fn: () => unknown) => fn,
+  unstable_cache: cacheMock,
 }))
 
 vi.mock('next-intl/server', () => ({
@@ -42,6 +43,7 @@ vi.mock('@/components/LocalizedLink', () => ({
 
 describe('InsightsListPage', () => {
   beforeEach(() => {
+    cacheMock.mockClear()
     findMock.mockReset()
   })
 
@@ -58,10 +60,14 @@ describe('InsightsListPage', () => {
     expect(findMock).toHaveBeenCalledWith({
       collection: 'insights',
       sort: '-publishedAt',
-      where: { status: { equals: 'published' } },
+      where: { _status: { equals: 'published' } },
       locale: 'id',
       depth: 1,
       limit: 50,
+    })
+    expect(findMock.mock.calls[0]?.[0].where).not.toHaveProperty('status')
+    expect(cacheMock).toHaveBeenLastCalledWith(expect.any(Function), ['insights-list-id'], {
+      tags: ['insights:id', 'insights:list'],
     })
   })
 
@@ -102,14 +108,15 @@ describe('InsightsListPage', () => {
     expect(screen.getByText('No articles yet.')).toBeInTheDocument()
   })
 
-  it('falls back to the empty state when Payload is unavailable during build', async () => {
+  it('propagates Payload failures instead of rendering a false empty state', async () => {
     const { default: InsightsListPage } = await import('./page')
-    findMock.mockRejectedValueOnce(
-      new Error('cannot connect to Postgres. Details: connect ECONNREFUSED 127.0.0.1:5432'),
+    const infrastructureError = new Error(
+      'cannot connect to Postgres. Details: connect ECONNREFUSED 127.0.0.1:5432',
     )
+    findMock.mockRejectedValueOnce(infrastructureError)
 
-    render(await InsightsListPage({ params: Promise.resolve({ locale: 'en' }) }))
-
-    expect(screen.getByText('No articles yet.')).toBeInTheDocument()
+    await expect(InsightsListPage({ params: Promise.resolve({ locale: 'en' }) })).rejects.toBe(
+      infrastructureError,
+    )
   })
 })

@@ -10,6 +10,7 @@ import {
 type PayloadCall = {
   collection: string
   locale?: string
+  draft?: boolean
   data?: Record<string, unknown>
   where?: Record<string, { equals: string }>
 }
@@ -81,21 +82,42 @@ describe('seedInsights', () => {
       expect.objectContaining({
         collection: 'insights',
         locale: 'en',
+        draft: true,
         data: expect.objectContaining({
           slug: 'bkpm-reg-5-2025-what-changes',
           category: 'category-regulation',
           author: 'author-Diah Putri',
-          status: 'published',
+          _status: 'published',
         }),
       }),
     )
+    const insightCreates = create.mock.calls
+      .map(([call]) => call)
+      .filter((call) => call.collection === 'insights')
+    expect(insightCreates).toHaveLength(3)
+    expect(insightCreates).toEqual(
+      expect.arrayContaining(
+        INSIGHT_ARTICLE_SEEDS.map((article) =>
+          expect.objectContaining({
+            locale: 'en',
+            draft: true,
+            data: expect.objectContaining({ slug: article.slug, _status: 'published' }),
+          }),
+        ),
+      ),
+    )
+    for (const call of insightCreates) {
+      expect(call.data).not.toHaveProperty('status')
+    }
     expect(update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         collection: 'insights',
         locale: 'id',
+        draft: true,
         data: expect.objectContaining({
           title: 'Cicilan PPh 25: panduan untuk investor asing',
           body: expect.objectContaining({ root: expect.any(Object) }),
+          _status: 'published',
         }),
       }),
     )

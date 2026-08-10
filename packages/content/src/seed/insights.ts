@@ -256,20 +256,22 @@ export async function seedInsights(payload: Payload) {
     const created = await payload.create({
       collection: 'insights',
       locale: 'en',
+      draft: true,
       data: {
         slug: article.slug,
         ...localizedArticleData(article, 'en'),
         category: categoryRecord.id,
         author: authorRecord.id,
         publishedAt: article.publishedAt,
-        status: 'published',
+        _status: 'published',
       },
     })
     await payload.update({
       collection: 'insights',
       id: created.id,
       locale: 'id',
-      data: localizedArticleData(article, 'id'),
+      draft: true,
+      data: { ...localizedArticleData(article, 'id'), _status: 'published' },
     })
   }
 }
