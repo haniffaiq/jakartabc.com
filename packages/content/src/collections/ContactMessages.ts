@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
 import { adminOnly } from '../access/roles'
+import { createSubmissionDeliveryFields } from '../fields/submissionDelivery'
 
 export const ContactMessages: CollectionConfig = {
   slug: 'contact-messages',
@@ -16,6 +17,7 @@ export const ContactMessages: CollectionConfig = {
     delete: adminOnly,
   },
   fields: [
+    ...createSubmissionDeliveryFields(),
     { name: 'name', type: 'text', required: true },
     { name: 'email', type: 'email', required: true, index: true },
     { name: 'company', type: 'text' },
