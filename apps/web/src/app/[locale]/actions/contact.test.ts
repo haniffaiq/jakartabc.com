@@ -683,6 +683,39 @@ describe('submitContact', () => {
     expect(mocks.sendEmail).toHaveBeenCalledOnce()
   })
 
+  it('fails closed before send when the pending update is a stale no-op', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    mocks.update.mockImplementationOnce(async () => rows.get(submissionId))
+
+    expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
+    expect(rows.get(submissionId)).toMatchObject({
+      deliveryStatus: 'pending',
+      deliveryAttempts: 0,
+    })
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.release).toHaveBeenCalledWith(lease)
+  })
+
+  it.each([
+    ['id', { id: 999 }],
+    ['submission identity', { submissionId: '22222222-2222-4222-8222-222222222222' }],
+  ])(
+    'fails closed before send when the pending update returns a different %s',
+    async (_case, wrong) => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      mocks.update.mockImplementationOnce(
+        async ({ data }: { data: Partial<ContactRow> }) =>
+          ({ ...rows.get(submissionId)!, ...data, ...wrong }) as ContactRow,
+      )
+
+      expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
+      expect(mocks.sendEmail).not.toHaveBeenCalled()
+      expect(mocks.complete).not.toHaveBeenCalled()
+      expect(mocks.release).toHaveBeenCalledWith(lease)
+    },
+  )
+
   it('fails closed when Payload does not persist the requested final delivery state', async () => {
     mocks.update
       .mockImplementationOnce(async ({ data }: { data: Partial<ContactRow> }) => {

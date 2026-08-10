@@ -116,6 +116,23 @@ function samePendingTransition(
   )
 }
 
+function persistedPendingMatches(
+  persisted: ContactDocument,
+  expected: PendingDeliveryTransition,
+  expectedId: string | number,
+  expectedSubmissionId: string,
+) {
+  return (
+    persisted.id === expectedId &&
+    persisted.submissionId === expectedSubmissionId &&
+    persisted.deliveryStatus === expected.deliveryStatus &&
+    persisted.deliveryAttempts === expected.deliveryAttempts &&
+    persisted.lastDeliveryAttemptAt === expected.lastDeliveryAttemptAt &&
+    persisted.deliveredAt === expected.deliveredAt &&
+    persisted.deliveryError === expected.deliveryError
+  )
+}
+
 function sameFinalTransition(persisted: ContactDocument, expected: DeliveryAttemptResult['final']) {
   return (
     persisted.deliveryStatus === expected.deliveryStatus &&
@@ -327,12 +344,19 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
   let pending: PendingDeliveryTransition
   try {
     pending = beginDeliveryAttempt(currentAttempts, attemptedAt)
-    document = await payload.update({
+    const expectedDocumentId = document.id
+    const persistedPending = await payload.update({
       collection: 'contact-messages',
-      id: document.id,
+      id: expectedDocumentId,
       overrideAccess: true,
       data: pending,
     })
+    if (
+      !persistedPendingMatches(persistedPending, pending, expectedDocumentId, data.submissionId)
+    ) {
+      throw new Error('Delivery pending transition was not persisted')
+    }
+    document = persistedPending
   } catch {
     await releaseLease(lease)
     logEvent('error', 'delivery-pending-update-failed', data.submissionId)
