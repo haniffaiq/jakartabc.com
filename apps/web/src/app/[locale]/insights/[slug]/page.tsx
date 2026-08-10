@@ -184,7 +184,7 @@ export default async function InsightDetailPage({
       </header>
 
       <div className="prose-editorial">
-        <RichTextRender content={insight.body} regulations={regulations} />
+        <RichTextRender content={insight.body} locale={typedLocale} regulations={regulations} />
       </div>
 
       {hasRegulations(regulations) ? (

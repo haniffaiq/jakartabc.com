@@ -181,7 +181,11 @@ export default async function ServiceDetailPage({
           {service.overview ? (
             <section id="overview" className="scroll-mt-24">
               <Eyebrow>{t('overview')}</Eyebrow>
-              <RichTextRender content={service.overview} regulations={regulations} />
+              <RichTextRender
+                content={service.overview}
+                locale={locale}
+                regulations={regulations}
+              />
             </section>
           ) : null}
 

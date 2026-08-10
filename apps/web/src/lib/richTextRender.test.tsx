@@ -31,6 +31,19 @@ const text = (value: string, format = 0): FixtureNode => ({
   version: 1,
 })
 
+const hostileDiscriminators: [description: string, node: FixtureNode][] = [
+  ['__proto__', { type: '__proto__', version: 1 }],
+  ['constructor', { type: 'constructor', version: 1 }],
+  ['prototype', { type: 'prototype', version: 1 }],
+  ['blocks', { type: 'blocks', version: 1 }],
+  ['toString', { type: 'toString', version: 1 }],
+  ['block:__proto__', { fields: { blockType: '__proto__' }, type: 'block', version: 2 }],
+  ['block:constructor', { fields: { blockType: 'constructor' }, type: 'block', version: 2 }],
+  ['block:prototype', { fields: { blockType: 'prototype' }, type: 'block', version: 2 }],
+  ['block:blocks', { fields: { blockType: 'blocks' }, type: 'block', version: 2 }],
+  ['block:toString', { fields: { blockType: 'toString' }, type: 'block', version: 2 }],
+]
+
 afterEach(() => {
   cleanup()
   vi.unstubAllEnvs()
@@ -178,7 +191,9 @@ describe('RichTextRender', () => {
     const lists = screen.getAllByRole('list')
     expect(lists).toHaveLength(2)
     expect(lists[0]?.tagName).toBe('OL')
+    expect(lists[0]).toHaveClass('list-decimal', 'space-y-4', 'pl-6')
     expect(lists[1]?.tagName).toBe('UL')
+    expect(lists[1]).toHaveClass('mt-4', 'list-disc', 'space-y-2', 'pl-6')
     expect(screen.getAllByRole('listitem')).toHaveLength(2)
     expect(screen.getByText('Quoted guidance').closest('blockquote')).toBeInTheDocument()
   })
@@ -286,6 +301,49 @@ describe('RichTextRender', () => {
       '/services/pt-pma-setup',
     )
     expect(document.querySelector('a[href^="https://evil.test"]')).not.toBeInTheDocument()
+  })
+
+  it('localizes Indonesian internal links and regulation labels', () => {
+    render(
+      <RichTextRender
+        content={editorState([
+          {
+            children: [
+              {
+                children: [text('Layanan PMA')],
+                fields: {
+                  doc: {
+                    relationTo: 'services',
+                    value: { id: 22, slug: 'pt-pma-setup' },
+                  },
+                  linkType: 'internal',
+                },
+                type: 'link',
+                version: 3,
+              },
+            ],
+            direction: null,
+            format: '',
+            indent: 0,
+            type: 'paragraph',
+            version: 1,
+          },
+          {
+            fields: { blockType: 'regulationCite', regulation: 'bkpm-5' },
+            type: 'block',
+            version: 2,
+          },
+        ])}
+        locale="id"
+        regulations={[{ id: 'bkpm-5', code: 'PerBKPM 5/2025', url: '/regulations/bkpm-5' }]}
+      />,
+    )
+
+    expect(screen.getByRole('link', { name: 'Layanan PMA' })).toHaveAttribute(
+      'href',
+      '/id/services/pt-pma-setup',
+    )
+    expect(screen.getByText('Regulasi')).toBeInTheDocument()
   })
 
   it.each([
@@ -446,6 +504,15 @@ describe('RichTextRender', () => {
     ).toThrow(/Unsupported rich-text node: mystery-node/)
   })
 
+  it.each(hostileDiscriminators)(
+    'throws a controlled project error for hostile discriminator %s',
+    (description, node) => {
+      expect(() =>
+        render(<RichTextRender content={editorState([node])} regulations={[]} />),
+      ).toThrow(`Unsupported rich-text node: ${description}`)
+    },
+  )
+
   it('drops an unknown node safely in production', () => {
     vi.stubEnv('NODE_ENV', 'production')
 
@@ -458,4 +525,17 @@ describe('RichTextRender', () => {
 
     expect(container).toBeEmptyDOMElement()
   })
+
+  it.each(hostileDiscriminators)(
+    'drops hostile discriminator %s safely in production',
+    (_description, node) => {
+      vi.stubEnv('NODE_ENV', 'production')
+
+      const { container } = render(
+        <RichTextRender content={editorState([node])} regulations={[]} />,
+      )
+
+      expect(container).toBeEmptyDOMElement()
+    },
+  )
 })

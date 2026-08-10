@@ -22,9 +22,38 @@ type Regulation = {
 
 type UnknownRecord = Record<string, unknown>
 type ConverterArgs = JSXConverterArgs<SerializedLexicalNode & UnknownRecord>
+type RichTextLocale = 'en' | 'id'
 
 const CONTENT_SLUG_MAX_LENGTH = 128
 const CONTENT_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const SUPPORTED_NODE_TYPES = Object.freeze(
+  Object.assign(Object.create(null) as Record<string, true>, {
+    autolink: true,
+    block: true,
+    heading: true,
+    horizontalrule: true,
+    linebreak: true,
+    link: true,
+    list: true,
+    listitem: true,
+    paragraph: true,
+    quote: true,
+    relationship: true,
+    tab: true,
+    table: true,
+    tablecell: true,
+    tablerow: true,
+    text: true,
+    upload: true,
+  }),
+)
+const SUPPORTED_BLOCK_TYPES = Object.freeze(
+  Object.assign(Object.create(null) as Record<string, true>, {
+    dropCap: true,
+    pullQuote: true,
+    regulationCite: true,
+  }),
+)
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null
@@ -38,7 +67,7 @@ function positiveNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
-function UnknownRichTextNode({ description }: { description: string }) {
+function unsupportedRichTextNode(description: string): null {
   if (process.env.NODE_ENV !== 'production') {
     throw new Error(`Unsupported rich-text node: ${description}`)
   }
@@ -46,19 +75,96 @@ function UnknownRichTextNode({ description }: { description: string }) {
   return null
 }
 
-function nodeDescription(node: UnknownRecord): string {
-  if (node.type === 'block' && isRecord(node.fields)) {
-    return `block:${stringValue(node.fields.blockType) ?? 'unknown'}`
-  }
-
-  if (node.type === 'inlineBlock' && isRecord(node.fields)) {
-    return `inlineBlock:${stringValue(node.fields.blockType) ?? 'unknown'}`
-  }
-
-  return stringValue(node.type) ?? 'unknown'
+function UnknownRichTextNode({ description }: { description: string }) {
+  return unsupportedRichTextNode(description)
 }
 
-function internalDocumentHref(fields: UnknownRecord): string | null {
+function nodeDescription(node: UnknownRecord): string {
+  const type = Object.hasOwn(node, 'type') ? stringValue(node.type) : null
+  const fields = Object.hasOwn(node, 'fields') && isRecord(node.fields) ? node.fields : null
+
+  if (type === 'block' && fields) {
+    const blockType = Object.hasOwn(fields, 'blockType') ? stringValue(fields.blockType) : null
+    return `block:${blockType ?? 'unknown'}`
+  }
+
+  if (type === 'inlineBlock' && fields) {
+    const blockType = Object.hasOwn(fields, 'blockType') ? stringValue(fields.blockType) : null
+    return `inlineBlock:${blockType ?? 'unknown'}`
+  }
+
+  return type ?? 'unknown'
+}
+
+function normalizeNodes(nodes: unknown): SerializedLexicalNode[] {
+  if (!Array.isArray(nodes)) return []
+
+  return nodes.flatMap((value) => {
+    if (!isRecord(value)) {
+      unsupportedRichTextNode('unknown')
+      return []
+    }
+
+    const type = Object.hasOwn(value, 'type') ? stringValue(value.type) : null
+    if (!type || !Object.hasOwn(SUPPORTED_NODE_TYPES, type)) {
+      unsupportedRichTextNode(nodeDescription(value))
+      return []
+    }
+
+    if (type === 'block') {
+      const fields = Object.hasOwn(value, 'fields') && isRecord(value.fields) ? value.fields : null
+      const blockType =
+        fields && Object.hasOwn(fields, 'blockType') ? stringValue(fields.blockType) : null
+
+      if (!blockType || !Object.hasOwn(SUPPORTED_BLOCK_TYPES, blockType)) {
+        unsupportedRichTextNode(nodeDescription(value))
+        return []
+      }
+    }
+
+    if (Object.hasOwn(value, 'children')) {
+      if (!Array.isArray(value.children)) {
+        unsupportedRichTextNode(nodeDescription(value))
+        return []
+      }
+
+      return [
+        { ...value, children: normalizeNodes(value.children) } as unknown as SerializedLexicalNode,
+      ]
+    }
+
+    return [value as SerializedLexicalNode]
+  })
+}
+
+function normalizeEditorState(
+  content: SerializedEditorState<SerializedLexicalNode>,
+): SerializedEditorState<SerializedLexicalNode> {
+  const root = isRecord(content.root) ? content.root : null
+  if (!root) {
+    unsupportedRichTextNode('root')
+    return {
+      root: {
+        children: [],
+        direction: null,
+        format: '',
+        indent: 0,
+        type: 'root',
+        version: 1,
+      },
+    } as SerializedEditorState<SerializedLexicalNode>
+  }
+
+  return {
+    ...content,
+    root: {
+      ...root,
+      children: normalizeNodes(root.children),
+    },
+  } as SerializedEditorState<SerializedLexicalNode>
+}
+
+function internalDocumentHref(fields: UnknownRecord, locale: RichTextLocale): string | null {
   const doc = isRecord(fields.doc) ? fields.doc : null
   if (!doc || !isRecord(doc.value)) return null
 
@@ -70,32 +176,35 @@ function internalDocumentHref(fields: UnknownRecord): string | null {
     return null
   }
 
-  return safeHref(`${basePath}/${slug}`)
+  const localePrefix = locale === 'id' ? '/id' : ''
+  return safeHref(`${localePrefix}${basePath}/${slug}`)
 }
 
-function linkConverter({ node, nodesToJSX }: ConverterArgs): React.ReactNode {
-  const fields = isRecord(node.fields) ? node.fields : {}
-  const children = nodesToJSX({ nodes: Array.isArray(node.children) ? node.children : [] })
-  const href =
-    fields.linkType === 'internal'
-      ? internalDocumentHref(fields)
-      : fields.linkType === 'custom' || node.type === 'autolink'
-        ? safeHref(fields.url)
-        : null
+function createLinkConverter(locale: RichTextLocale) {
+  return function RichTextLinkConverter({ node, nodesToJSX }: ConverterArgs): React.ReactNode {
+    const fields = isRecord(node.fields) ? node.fields : {}
+    const children = nodesToJSX({ nodes: Array.isArray(node.children) ? node.children : [] })
+    const href =
+      fields.linkType === 'internal'
+        ? internalDocumentHref(fields, locale)
+        : fields.linkType === 'custom' || node.type === 'autolink'
+          ? safeHref(fields.url)
+          : null
 
-  if (!href) return <>{children}</>
+    if (!href) return <>{children}</>
 
-  const newTab = fields.newTab === true
-  return (
-    <a
-      href={href}
-      className="text-ochre-700 underline-offset-4 hover:underline"
-      rel={newTab ? 'noopener noreferrer' : undefined}
-      target={newTab ? '_blank' : undefined}
-    >
-      {children}
-    </a>
-  )
+    const newTab = fields.newTab === true
+    return (
+      <a
+        href={href}
+        className="text-ochre-700 underline-offset-4 hover:underline"
+        rel={newTab ? 'noopener noreferrer' : undefined}
+        target={newTab ? '_blank' : undefined}
+      >
+        {children}
+      </a>
+    )
+  }
 }
 
 function uploadConverter({ node }: ConverterArgs): React.ReactNode {
@@ -191,7 +300,10 @@ function relationshipConverter({ node }: ConverterArgs): React.ReactNode {
   )
 }
 
-function createConverters(regulations: Regulation[]): JSXConvertersFunction {
+function createConverters(
+  regulations: Regulation[],
+  locale: RichTextLocale,
+): JSXConvertersFunction {
   const lookupRegulation = (id: unknown) =>
     typeof id === 'string' || typeof id === 'number'
       ? regulations.find((regulation) => regulation.id === id)
@@ -255,8 +367,24 @@ function createConverters(regulations: Regulation[]): JSXConvertersFunction {
 
         return <UnknownRichTextNode description={`heading:${String(node.tag ?? 'unknown')}`} />
       },
-      autolink: linkConverter,
-      link: linkConverter,
+      list: ({ node, nodesToJSX, parent }: ConverterArgs) => {
+        const children = nodesToJSX({ nodes: Array.isArray(node.children) ? node.children : [] })
+        const isNested = parent.type === 'listitem'
+        const spacing = isNested ? 'mt-4 space-y-2' : 'mt-6 space-y-4'
+
+        if (node.tag === 'ol') {
+          return <ol className={`${spacing} list-decimal pl-6`}>{children}</ol>
+        }
+
+        if (node.tag === 'ul') {
+          const listStyle = node.listType === 'check' ? 'list-none' : 'list-disc'
+          return <ul className={`${spacing} ${listStyle} pl-6`}>{children}</ul>
+        }
+
+        return <UnknownRichTextNode description={`list:${String(node.tag ?? 'unknown')}`} />
+      },
+      autolink: createLinkConverter(locale),
+      link: createLinkConverter(locale),
       relationship: relationshipConverter,
       upload: uploadConverter,
       blocks: {
@@ -300,7 +428,7 @@ function createConverters(regulations: Regulation[]): JSXConvertersFunction {
 
           return (
             <aside className="my-8 border-l-2 border-ochre-600 pl-6">
-              <Eyebrow>Regulation</Eyebrow>
+              <Eyebrow>{locale === 'id' ? 'Regulasi' : 'Regulation'}</Eyebrow>
               <p className="mt-2">{citation}</p>
             </aside>
           )
@@ -314,10 +442,21 @@ function createConverters(regulations: Regulation[]): JSXConvertersFunction {
 
 export function RichTextRender({
   content,
+  locale = 'en',
   regulations,
 }: {
   content: SerializedEditorState<SerializedLexicalNode>
+  locale?: RichTextLocale
   regulations: Regulation[]
 }) {
-  return <RichText converters={createConverters(regulations)} data={content} disableContainer />
+  const safeLocale: RichTextLocale = locale === 'id' ? 'id' : 'en'
+  const normalizedContent = normalizeEditorState(content)
+
+  return (
+    <RichText
+      converters={createConverters(regulations, safeLocale)}
+      data={normalizedContent}
+      disableContainer
+    />
+  )
 }
