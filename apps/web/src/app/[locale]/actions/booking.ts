@@ -54,6 +54,9 @@ type BookingLeadDoc = {
   preferredWindows?: unknown
   message?: unknown
   locale?: unknown
+  lastDeliveryAttemptAt?: unknown
+  deliveredAt?: unknown
+  deliveryError?: unknown
 }
 
 type PayloadBookingClient = {
@@ -63,6 +66,7 @@ type PayloadBookingClient = {
     limit: number
     overrideAccess: true
     depth?: number
+    locale?: 'en' | 'id' | 'all'
   }) => Promise<{ docs: Array<ServiceDoc | BookingLeadDoc> }>
   create: (args: {
     collection: 'booking-leads'
@@ -119,6 +123,23 @@ function canResumeBeforeOwnerAttempt(document: BookingLeadDoc) {
   return deliveryState(document) === 'pending' && document.deliveryAttempts === 0
 }
 
+function hasExactPersistedTransition(document: BookingLeadDoc, transition: DeliveryTransition) {
+  try {
+    return isDeepStrictEqual(
+      {
+        deliveryStatus: document.deliveryStatus,
+        deliveryAttempts: document.deliveryAttempts,
+        lastDeliveryAttemptAt: document.lastDeliveryAttemptAt,
+        deliveredAt: document.deliveredAt,
+        deliveryError: document.deliveryError,
+      },
+      transition,
+    )
+  } catch {
+    return false
+  }
+}
+
 function hydratePersistedBookingMail(
   document: BookingLeadDoc,
 ): { data: BookingMailData; serviceName: string } | null {
@@ -138,14 +159,19 @@ function hydratePersistedBookingMail(
 
     const service = document.service as Record<string, unknown>
     const serviceId = service.id
-    const serviceName = service.name
+    const localizedNames = service.name
     if (
       (typeof serviceId !== 'string' && typeof serviceId !== 'number') ||
       (typeof serviceId === 'string' && serviceId.trim().length === 0) ||
       (typeof serviceId === 'number' && (!Number.isSafeInteger(serviceId) || serviceId <= 0)) ||
-      typeof serviceName !== 'string' ||
-      serviceName.trim().length === 0
+      typeof localizedNames !== 'object' ||
+      localizedNames === null
     ) {
+      return null
+    }
+
+    const serviceName = (localizedNames as Record<string, unknown>)[parsed.data.locale]
+    if (typeof serviceName !== 'string' || serviceName.trim().length === 0) {
       return null
     }
 
@@ -183,6 +209,7 @@ async function findBookingBySubmissionId(
     limit: 1,
     overrideAccess: true,
     depth: 1,
+    locale: 'all',
   })
   return result.docs[0] as BookingLeadDoc | undefined
 }
@@ -372,6 +399,7 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
         where: { slug: { equals: data.serviceSlug } },
         limit: 1,
         overrideAccess: true,
+        locale: data.locale,
       })
       service = services.docs[0] as ServiceDoc | undefined
     } catch {
@@ -387,7 +415,7 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
     }
 
     try {
-      lead = await payload.create({
+      await payload.create({
         collection: 'booking-leads',
         overrideAccess: true,
         depth: 1,
@@ -426,6 +454,19 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
       }
       lead = raced
     }
+
+    if (!lead) {
+      try {
+        lead = await findBookingBySubmissionId(payload, data.submissionId)
+      } catch {
+        await releaseLease(lease)
+        return operationalFailure(data.submissionId, 'created-submission-hydration-lookup-failed')
+      }
+      if (!lead) {
+        await releaseLease(lease)
+        return operationalFailure(data.submissionId, 'created-submission-hydration-missing')
+      }
+    }
   }
 
   const persistedMail = hydratePersistedBookingMail(lead)
@@ -436,8 +477,9 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
 
   const attemptedAt = new Date()
   const pending = beginDeliveryAttempt(0, attemptedAt)
+  let persistedPending: BookingLeadDoc
   try {
-    await payload.update({
+    persistedPending = await payload.update({
       collection: 'booking-leads',
       id: lead.id,
       overrideAccess: true,
@@ -446,6 +488,10 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   } catch {
     await releaseLease(lease)
     return operationalFailure(data.submissionId, 'delivery-pending-persist-failed')
+  }
+  if (!hasExactPersistedTransition(persistedPending, pending)) {
+    await releaseLease(lease)
+    return operationalFailure(data.submissionId, 'delivery-pending-persist-mismatch')
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'

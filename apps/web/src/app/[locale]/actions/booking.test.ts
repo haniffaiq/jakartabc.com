@@ -103,7 +103,13 @@ function bookingRow(deliveryStatus: 'pending' | 'sent' | 'failed' = 'sent', deli
     email: 'maria@example.co',
     company: 'Solstice',
     phone: '+81-1',
-    service: { id: 1, name: 'Canonical PT PMA Setup' },
+    service: {
+      id: 1,
+      name: {
+        en: 'Canonical PT PMA Setup',
+        id: 'Layanan PT PMA Kanonis',
+      },
+    },
     preferredWindows: ['mon-am', 'tue-pm'],
     message: 'Hello, I would like to set up a PT PMA.',
     locale: 'en',
@@ -115,15 +121,18 @@ function renderedProps(index: number) {
   return calls[index]?.[0].props
 }
 
+let createdBookingRow: ReturnType<typeof bookingRow> | undefined
+
 describe('submitBooking', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    createdBookingRow = undefined
 
     payloadClientMock.mockResolvedValue({ create: createMock, find: findMock, update: updateMock })
     findMock.mockImplementation(async ({ collection }: { collection: string }) =>
       collection === 'services'
         ? { docs: [{ id: 1, slug: 'pt-pma-setup', name: 'PT PMA Setup' }] }
-        : { docs: [] },
+        : { docs: createdBookingRow ? [createdBookingRow] : [] },
     )
     verifyMock.mockResolvedValue(true)
     rateLimitMock.mockResolvedValue({ allowed: true, remaining: 4 })
@@ -135,7 +144,10 @@ describe('submitBooking', () => {
       (service: string, name: string) => `Booking: ${service} — ${name}`,
     )
     sendMock.mockResolvedValue({ ok: true, id: 'm_1' })
-    createMock.mockResolvedValue(bookingRow('pending', 0))
+    createMock.mockImplementation(async () => {
+      createdBookingRow = bookingRow('pending', 0)
+      return createdBookingRow
+    })
     updateMock.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
       ...bookingRow(),
       ...data,
@@ -164,17 +176,29 @@ describe('submitBooking', () => {
       limit: 1,
       overrideAccess: true,
       depth: 1,
+      locale: 'all',
     })
     expect(findMock).toHaveBeenNthCalledWith(2, {
       collection: 'services',
       where: { slug: { equals: 'pt-pma-setup' } },
       limit: 1,
       overrideAccess: true,
+      locale: 'en',
+    })
+    expect(findMock).toHaveBeenNthCalledWith(3, {
+      collection: 'booking-leads',
+      where: { submissionId: { equals: SUBMISSION_ID } },
+      limit: 1,
+      overrideAccess: true,
+      depth: 1,
+      locale: 'all',
     })
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({
         collection: 'booking-leads',
         overrideAccess: true,
+        depth: 1,
+        locale: 'en',
         data: expect.objectContaining({
           submissionId: SUBMISSION_ID,
           email: 'maria@example.co',
@@ -358,6 +382,7 @@ describe('submitBooking', () => {
       limit: 1,
       overrideAccess: true,
       depth: 1,
+      locale: 'all',
     })
     expect(sendMock).not.toHaveBeenCalled()
     expect(createMock).not.toHaveBeenCalled()
@@ -436,6 +461,88 @@ describe('submitBooking', () => {
     )
     expect(sendMock.mock.calls.filter(([mail]) => mail.to === 'sales@example.co')).toHaveLength(1)
     expect(completeMock).toHaveBeenCalledWith(LEASE)
+  })
+
+  it('selects the localized service name from persisted row locale, not retry locale', async () => {
+    findMock.mockResolvedValueOnce({
+      docs: [
+        {
+          ...bookingRow('pending', 0),
+          locale: 'id',
+          service: {
+            id: 1,
+            name: {
+              en: 'English Service Name',
+              id: 'Nama Layanan Indonesia',
+            },
+          },
+        },
+      ],
+    })
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: true,
+      submissionId: SUBMISSION_ID,
+      delivery: 'sent',
+    })
+    expect(renderedProps(0)).toMatchObject({
+      locale: 'id',
+      service: 'Nama Layanan Indonesia',
+    })
+    expect(renderedProps(1)).toMatchObject({
+      locale: 'id',
+      service: 'Nama Layanan Indonesia',
+    })
+    expect(sendMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ subject: 'Booking: Nama Layanan Indonesia — Maria T' }),
+    )
+    expect(sendMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ subject: 'Kami menerima permintaan konsultasi Anda' }),
+    )
+    expect(
+      JSON.stringify({ render: renderMock.mock.calls, send: sendMock.mock.calls }),
+    ).not.toContain('English Service Name')
+  })
+
+  it('fails closed when locale-all service data lacks the persisted row locale', async () => {
+    findMock.mockResolvedValueOnce({
+      docs: [
+        {
+          ...bookingRow('pending', 0),
+          locale: 'id',
+          service: { id: 1, name: { en: 'English Service Name' } },
+        },
+      ],
+    })
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(releaseMock).toHaveBeenCalledWith(LEASE)
+  })
+
+  it('does not send when the pending update returns a stale transition', async () => {
+    findMock.mockResolvedValueOnce({ docs: [bookingRow('pending', 0)] })
+    updateMock.mockResolvedValueOnce({
+      ...bookingRow('pending', 1),
+      lastDeliveryAttemptAt: '2020-01-01T00:00:00.000Z',
+      deliveredAt: null,
+      deliveryError: null,
+    })
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(updateMock).toHaveBeenCalledTimes(1)
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(releaseMock).toHaveBeenCalledWith(LEASE)
+    expect(completeMock).not.toHaveBeenCalled()
   })
 
   it('hydrates a stranded retry only from persisted row A when FormData B reuses its UUID', async () => {
@@ -661,7 +768,10 @@ describe('submitBooking', () => {
 
   it('does not report success when the final delivery update fails', async () => {
     updateMock
-      .mockResolvedValueOnce({ ...bookingRow('pending', 1) })
+      .mockImplementationOnce(async ({ data }: { data: Record<string, unknown> }) => ({
+        ...bookingRow('pending', 1),
+        ...data,
+      }))
       .mockRejectedValueOnce(new Error('db final-update secret'))
 
     expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
