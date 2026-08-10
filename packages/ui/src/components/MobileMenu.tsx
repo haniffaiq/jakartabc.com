@@ -69,12 +69,50 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
 
+const desktopMediaQuery = '(min-width: 768px)'
+
+function hasLayoutBox(element: HTMLElement) {
+  return element.getClientRects().length > 0 || element.offsetWidth > 0 || element.offsetHeight > 0
+}
+
+function isAvailable(element: HTMLElement, dialog: HTMLElement) {
+  let current: HTMLElement | null = element
+
+  while (current) {
+    if (
+      current.hidden ||
+      current.hasAttribute('inert') ||
+      current.getAttribute('aria-hidden') === 'true'
+    ) {
+      return false
+    }
+
+    const style = window.getComputedStyle(current)
+    if (
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.visibility === 'collapse'
+    ) {
+      return false
+    }
+
+    if (current === dialog) break
+    current = current.parentElement
+  }
+
+  // JSDOM reports zero geometry for every element. Only use layout boxes when
+  // the runtime can establish that the dialog itself participates in layout.
+  return !hasLayoutBox(dialog) || hasLayoutBox(element)
+}
+
 function getFocusableElements(dialog: HTMLElement) {
   return Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector)).filter(
     (element) =>
       element.tabIndex >= 0 &&
       !element.hasAttribute('disabled') &&
-      element.getAttribute('aria-hidden') !== 'true',
+      !element.matches(':disabled') &&
+      !element.closest('fieldset[disabled]') &&
+      isAvailable(element, dialog),
   )
 }
 
@@ -111,6 +149,10 @@ export function MobileMenu({
 
     const previousOverflow = document.body.style.overflow
     const trigger = triggerRef?.current
+    const desktop = window.matchMedia?.(desktopMediaQuery)
+    const onDesktopChange = (event: MediaQueryListEvent) => {
+      if (event.matches) onCloseRef.current()
+    }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
@@ -121,7 +163,7 @@ export function MobileMenu({
       if (event.key !== 'Tab') return
 
       const dialog = dialogRef.current
-      if (!dialog) return
+      if (!dialog || desktop?.matches || !isAvailable(dialog, dialog)) return
 
       const focusable = getFocusableElements(dialog)
       if (focusable.length === 0) {
@@ -150,6 +192,12 @@ export function MobileMenu({
       }
     }
 
+    if (desktop?.matches) {
+      onCloseRef.current()
+      return undefined
+    }
+
+    desktop?.addEventListener('change', onDesktopChange)
     document.addEventListener('keydown', onKeyDown)
     document.body.style.overflow = 'hidden'
     const dialog = dialogRef.current
@@ -158,6 +206,7 @@ export function MobileMenu({
     focusTarget?.focus()
 
     return () => {
+      desktop?.removeEventListener('change', onDesktopChange)
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = previousOverflow
       trigger?.focus()

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import * as React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -34,8 +34,51 @@ function TestLink({ href, className, children, onClick }: MobileMenuLinkProps) {
   )
 }
 
+function installDesktopMediaQuery() {
+  let matches = false
+  const listeners = new Set<EventListenerOrEventListenerObject>()
+  const addEventListener = vi.fn((_type: string, listener: EventListenerOrEventListenerObject) => {
+    listeners.add(listener)
+  })
+  const removeEventListener = vi.fn(
+    (_type: string, listener: EventListenerOrEventListenerObject) => {
+      listeners.delete(listener)
+    },
+  )
+  const mediaQuery = {
+    get matches() {
+      return matches
+    },
+    media: '(min-width: 768px)',
+    onchange: null,
+    addEventListener,
+    removeEventListener,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(() => true),
+  } as unknown as MediaQueryList
+
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn(() => mediaQuery),
+  )
+
+  return {
+    mediaQuery,
+    enterDesktop() {
+      matches = true
+      const event = { matches: true, media: mediaQuery.media } as MediaQueryListEvent
+      for (const listener of listeners) {
+        if (typeof listener === 'function') listener.call(mediaQuery, event)
+        else listener.handleEvent(event)
+      }
+    },
+  }
+}
+
 afterEach(() => {
   document.body.style.overflow = ''
+  vi.unstubAllGlobals()
 })
 
 describe('MobileMenu', () => {
@@ -176,6 +219,84 @@ describe('MobileMenu', () => {
     unmount()
 
     expect(document.body.style.overflow).toBe('scroll')
+  })
+
+  it('closes and releases focus handling when the viewport reaches desktop', () => {
+    const desktop = installDesktopMediaQuery()
+
+    function Harness() {
+      const triggerRef = React.useRef<HTMLButtonElement>(null)
+      const [open, setOpen] = React.useState(false)
+
+      return (
+        <>
+          <button ref={triggerRef} type="button" onClick={() => setOpen(true)}>
+            Open navigation
+          </button>
+          <MobileMenu
+            {...baseProps}
+            open={open}
+            onClose={() => setOpen(false)}
+            triggerRef={triggerRef}
+          />
+        </>
+      )
+    }
+
+    render(<Harness />)
+    const trigger = screen.getByRole('button', { name: 'Open navigation' })
+    fireEvent.click(trigger)
+
+    expect(document.body.style.overflow).toBe('hidden')
+
+    act(() => desktop.enterDesktop())
+
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.body.style.overflow).toBe('')
+    expect(trigger).toHaveFocus()
+    expect(desktop.mediaQuery.removeEventListener).toHaveBeenCalled()
+
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true })
+    document.dispatchEvent(tab)
+    expect(tab.defaultPrevented).toBe(false)
+  })
+
+  it('skips controls inside hidden and inert ancestors when wrapping focus', () => {
+    render(<MobileMenu {...baseProps} open onClose={() => {}} />)
+
+    const close = screen.getByRole('button', { name: /close menu/i })
+    const services = screen.getByRole('link', { name: 'Services' })
+    const about = screen.getByRole('link', { name: 'About' })
+    const localeToggle = screen.getByRole('button', { name: /switch to indonesian/i })
+    const cta = screen.getByRole('link', { name: 'Book consultation' })
+    services.parentElement?.setAttribute('hidden', '')
+    localeToggle.parentElement?.setAttribute('inert', '')
+    if (cta.parentElement) cta.parentElement.style.display = 'none'
+
+    about.focus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+
+    expect(close).toHaveFocus()
+  })
+
+  it('does not trap Tab when the dialog is unavailable', () => {
+    render(
+      <>
+        <button type="button">Outside</button>
+        <MobileMenu {...baseProps} open onClose={() => {}} />
+      </>,
+    )
+
+    const outside = screen.getByRole('button', { name: 'Outside' })
+    const dialog = screen.getByRole('dialog')
+    dialog.setAttribute('aria-hidden', 'true')
+    outside.focus()
+
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true })
+    document.dispatchEvent(tab)
+
+    expect(tab.defaultPrevented).toBe(false)
+    expect(outside).toHaveFocus()
   })
 
   it('uses supplied localized dialog labels', () => {
