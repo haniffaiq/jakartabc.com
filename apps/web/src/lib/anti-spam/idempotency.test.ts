@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+const redisClientMocks = vi.hoisted(() => ({ getRedis: vi.fn() }))
+
 vi.mock('@/env', () => ({
   env: {
     PAYLOAD_SECRET: 'test-payload-secret-that-is-at-least-32-chars',
@@ -8,8 +10,13 @@ vi.mock('@/env', () => ({
   },
 }))
 
+vi.mock('@/lib/redis/client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/redis/client')>()),
+  getRedis: redisClientMocks.getRedis,
+}))
+
 import { RedisUnavailableError } from '@/lib/redis/client'
-import { createSubmissionCoordinator } from './idempotency'
+import { createSubmissionCoordinator, submissionCoordinator } from './idempotency'
 
 type SetOptions = { NX?: boolean; EX: number }
 
@@ -171,6 +178,21 @@ describe('submission idempotency coordinator', () => {
     expect(renewCall?.script).toMatch(/GET/)
     expect(renewCall?.script).toMatch(/EXPIRE/)
     expect(lockKey).toMatch(/^jakartabc:test:submission:\{[a-f0-9]{64}\}:lock$/)
+  })
+
+  it('forwards environment-bound renewal through the shared coordinator', async () => {
+    const redis = new FakeIdempotencyRedis()
+    redisClientMocks.getRedis.mockResolvedValueOnce(redis)
+    const acquired = await submissionCoordinator.acquire('environment-submission')
+    if (acquired.state !== 'acquired') throw new Error('expected acquired lease')
+
+    await expect(submissionCoordinator.renew(acquired.lease)).resolves.toEqual({
+      state: 'renewed',
+    })
+
+    expect(redisClientMocks.getRedis).toHaveBeenCalledOnce()
+    expect(redis.evalCalls).toHaveLength(1)
+    expect(redis.evalCalls[0]?.arguments).toEqual([acquired.lease.token, '30'])
   })
 
   it('never extends a newer owner when a stale lease renews', async () => {
