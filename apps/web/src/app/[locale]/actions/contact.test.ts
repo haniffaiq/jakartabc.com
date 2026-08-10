@@ -359,6 +359,79 @@ describe('submitContact', () => {
     expect(mocks.complete).toHaveBeenCalledWith(lease)
   })
 
+  it('resumes an existing untouched pending row while holding its lease', async () => {
+    rows.set(submissionId, {
+      id: 23,
+      submissionId,
+      deliveryStatus: 'pending',
+      deliveryAttempts: 0,
+    })
+
+    const result = await submitContact(fd(validContact))
+
+    expect(result).toEqual({ ok: true, submissionId, delivery: 'sent' })
+    expect(mocks.create).not.toHaveBeenCalled()
+    expect(mocks.update).toHaveBeenCalledTimes(2)
+    expect(mocks.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        id: 23,
+        overrideAccess: true,
+        data: expect.objectContaining({ deliveryStatus: 'pending', deliveryAttempts: 1 }),
+      }),
+    )
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(2)
+    expect(
+      mocks.sendEmail.mock.calls.filter(([message]) => message.to === 'sales@example.com'),
+    ).toHaveLength(1)
+    expect(mocks.complete).toHaveBeenCalledWith(lease)
+  })
+
+  it('keeps an attempted pending row neutral and never resends owner email', async () => {
+    rows.set(submissionId, {
+      id: 24,
+      submissionId,
+      deliveryStatus: 'pending',
+      deliveryAttempts: 1,
+      lastDeliveryAttemptAt: '2026-08-10T10:00:00.000Z',
+    })
+
+    expect(await submitContact(fd(validContact))).toEqual({
+      ok: true,
+      submissionId,
+      delivery: 'pending',
+    })
+    expect(mocks.create).not.toHaveBeenCalled()
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.complete).toHaveBeenCalledWith(lease)
+  })
+
+  it('resumes an untouched pending row once under concurrent retries', async () => {
+    rows.set(submissionId, {
+      id: 25,
+      submissionId,
+      deliveryStatus: 'pending',
+      deliveryAttempts: 0,
+    })
+
+    const results = await Promise.all([
+      submitContact(fd(validContact)),
+      submitContact(fd(validContact)),
+    ])
+
+    expect(results).toContainEqual({ ok: true, submissionId, delivery: 'sent' })
+    expect(results).toContainEqual({ ok: false, code: 'temporarily-unavailable' })
+    expect(mocks.create).not.toHaveBeenCalled()
+    expect(
+      mocks.sendEmail.mock.calls.filter(([message]) => message.to === 'sales@example.com'),
+    ).toHaveLength(1)
+    expect(rows.get(submissionId)).toMatchObject({
+      deliveryStatus: 'sent',
+      deliveryAttempts: 1,
+    })
+  })
+
   it('reads the persisted result for a completed Redis marker without resending', async () => {
     coordinatorState = 'completed'
     rows.set(submissionId, {
@@ -414,6 +487,34 @@ describe('submitContact', () => {
     expect(mocks.find).toHaveBeenCalledTimes(2)
     expect(mocks.sendEmail).not.toHaveBeenCalled()
     expect(mocks.complete).toHaveBeenCalledWith(lease)
+  })
+
+  it('resumes an untouched row discovered during database create reconciliation', async () => {
+    mocks.create.mockImplementationOnce(async ({ data }: { data: Record<string, unknown> }) => {
+      rows.set(submissionId, {
+        ...data,
+        id: 26,
+        submissionId,
+        deliveryStatus: 'pending',
+        deliveryAttempts: 0,
+      })
+      throw new Error('duplicate key with private database details')
+    })
+
+    expect(await submitContact(fd(validContact))).toEqual({
+      ok: true,
+      submissionId,
+      delivery: 'sent',
+    })
+    expect(mocks.find).toHaveBeenCalledTimes(2)
+    expect(mocks.create).toHaveBeenCalledOnce()
+    expect(
+      mocks.sendEmail.mock.calls.filter(([message]) => message.to === 'sales@example.com'),
+    ).toHaveLength(1)
+    expect(rows.get(submissionId)).toMatchObject({
+      deliveryStatus: 'sent',
+      deliveryAttempts: 1,
+    })
   })
 
   it('releases the lease when persistence fails before a durable row exists', async () => {

@@ -86,6 +86,10 @@ function persistedDelivery(document: ContactDocument): DeliveryStatus {
   throw new Error('Invalid persisted delivery state')
 }
 
+function isUntouchedPending(document: ContactDocument) {
+  return document.deliveryStatus === 'pending' && document.deliveryAttempts === 0
+}
+
 function samePendingTransition(
   persisted: PendingDeliveryTransition,
   attempted: PendingDeliveryTransition,
@@ -242,40 +246,51 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
     logEvent('error', 'submission-reconciliation-read-failed', data.submissionId)
     return { ok: false, code: 'persistence' }
   }
-  if (existing) return completeExisting(existing, data.submissionId, lease)
 
   const company = optionalCompany(data.company)
   let document: ContactDocument
-  try {
-    document = await payload.create({
-      collection: 'contact-messages',
-      overrideAccess: true,
-      data: {
-        submissionId: data.submissionId,
-        deliveryStatus: 'pending',
-        deliveryAttempts: 0,
-        name: data.name,
-        email: data.email,
-        company,
-        message: data.message,
-        locale: data.locale,
-        status: 'new',
-      },
-    })
-  } catch {
-    try {
-      existing = await findBySubmissionId(payload, data.submissionId)
-    } catch {
-      await releaseLease(lease)
-      logEvent('error', 'submission-create-reconciliation-failed', data.submissionId)
-      return { ok: false, code: 'persistence' }
+  if (existing) {
+    if (!isUntouchedPending(existing)) {
+      return completeExisting(existing, data.submissionId, lease)
     }
+    document = existing
+  } else {
+    try {
+      document = await payload.create({
+        collection: 'contact-messages',
+        overrideAccess: true,
+        data: {
+          submissionId: data.submissionId,
+          deliveryStatus: 'pending',
+          deliveryAttempts: 0,
+          name: data.name,
+          email: data.email,
+          company,
+          message: data.message,
+          locale: data.locale,
+          status: 'new',
+        },
+      })
+    } catch {
+      try {
+        existing = await findBySubmissionId(payload, data.submissionId)
+      } catch {
+        await releaseLease(lease)
+        logEvent('error', 'submission-create-reconciliation-failed', data.submissionId)
+        return { ok: false, code: 'persistence' }
+      }
 
-    if (existing) return completeExisting(existing, data.submissionId, lease)
-
-    await releaseLease(lease)
-    logEvent('error', 'submission-create-failed', data.submissionId)
-    return { ok: false, code: 'persistence' }
+      if (existing) {
+        if (!isUntouchedPending(existing)) {
+          return completeExisting(existing, data.submissionId, lease)
+        }
+        document = existing
+      } else {
+        await releaseLease(lease)
+        logEvent('error', 'submission-create-failed', data.submissionId)
+        return { ok: false, code: 'persistence' }
+      }
+    }
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'
