@@ -9,6 +9,7 @@ export type MobileMenuLinkProps = {
   href: string
   className?: string
   children: React.ReactNode
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>
 }
 
 export type MobileMenuItem = {
@@ -21,6 +22,12 @@ export type MobileMenuCta = {
   href: string
 }
 
+export type MobileMenuLabels = {
+  dialog: string
+  close: string
+  navigation: string
+}
+
 export type MobileMenuProps = {
   open: boolean
   onClose: () => void
@@ -29,13 +36,15 @@ export type MobileMenuProps = {
   cta: MobileMenuCta
   locale: LocaleCode
   onLocaleChange: (next: LocaleCode) => void
+  triggerRef?: React.RefObject<HTMLElement | null>
+  labels?: MobileMenuLabels
   className?: string
   Link?: React.ComponentType<MobileMenuLinkProps>
 }
 
-function DefaultLink({ href, className, children }: MobileMenuLinkProps) {
+function DefaultLink({ href, className, children, onClick }: MobileMenuLinkProps) {
   return (
-    <a href={href} className={className}>
+    <a href={href} className={className} onClick={onClick}>
       {children}
     </a>
   )
@@ -51,6 +60,30 @@ const ctaLink =
   'font-body text-body-md text-bone-50 transition-colors duration-fast ease-out hover:bg-ochre-700 active:bg-ochre-700 active:translate-y-px ' +
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600'
 
+const focusableSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function getFocusableElements(dialog: HTMLElement) {
+  return Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+    (element) =>
+      element.tabIndex >= 0 &&
+      !element.hasAttribute('disabled') &&
+      element.getAttribute('aria-hidden') !== 'true',
+  )
+}
+
+function defaultLabels(locale: LocaleCode): MobileMenuLabels {
+  return locale === 'id'
+    ? { dialog: 'Menu seluler', close: 'Tutup menu', navigation: 'Navigasi seluler' }
+    : { dialog: 'Mobile menu', close: 'Close menu', navigation: 'Mobile navigation' }
+}
+
 export function MobileMenu({
   open,
   onClose,
@@ -59,41 +92,96 @@ export function MobileMenu({
   cta,
   locale,
   onLocaleChange,
+  triggerRef,
+  labels,
   className,
   Link = DefaultLink,
 }: MobileMenuProps) {
+  const dialogRef = React.useRef<HTMLDivElement>(null)
+  const closeButtonRef = React.useRef<HTMLButtonElement>(null)
+  const onCloseRef = React.useRef(onClose)
+  const localizedLabels = labels ?? defaultLabels(locale)
+
+  React.useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
   React.useEffect(() => {
     if (!open) return undefined
 
     const previousOverflow = document.body.style.overflow
+    const trigger = triggerRef?.current
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCloseRef.current()
+        return
+      }
+
+      if (event.key !== 'Tab') return
+
+      const dialog = dialogRef.current
+      if (!dialog) return
+
+      const focusable = getFocusableElements(dialog)
+      if (focusable.length === 0) {
+        event.preventDefault()
+        dialog.focus()
+        return
+      }
+
+      if (focusable.length === 1) {
+        event.preventDefault()
+        focusable[0]?.focus()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+      const focusIsOutside = !(active instanceof Node) || !dialog.contains(active)
+
+      if (event.shiftKey && (active === first || focusIsOutside)) {
+        event.preventDefault()
+        last?.focus()
+      } else if (!event.shiftKey && (active === last || focusIsOutside)) {
+        event.preventDefault()
+        first?.focus()
+      }
     }
 
     document.addEventListener('keydown', onKeyDown)
     document.body.style.overflow = 'hidden'
+    const dialog = dialogRef.current
+    const initialFocus = closeButtonRef.current ?? (dialog ? getFocusableElements(dialog)[0] : null)
+    const focusTarget = initialFocus ?? dialog
+    focusTarget?.focus()
 
     return () => {
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = previousOverflow
+      trigger?.focus()
     }
-  }, [open, onClose])
+  }, [open, triggerRef])
 
   if (!open) return null
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Menu"
+      aria-label={localizedLabels.dialog}
+      tabIndex={-1}
       className={cn('fixed inset-0 z-[100] bg-bone-50 text-ink-900 md:hidden', className)}
     >
       <div className="flex h-64 items-center justify-between border-b border-ink-900/[0.08] px-6">
         <span className="font-display text-2xl text-ink-900">{brand}</span>
         <button
+          ref={closeButtonRef}
           type="button"
           onClick={onClose}
-          aria-label="Close menu"
+          aria-label={localizedLabels.close}
           className="inline-flex size-10 items-center justify-center text-ink-900 transition-colors duration-fast ease-out hover:text-ochre-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ochre-600"
         >
           <svg
@@ -111,11 +199,11 @@ export function MobileMenu({
         </button>
       </div>
 
-      <nav aria-label="Mobile navigation" className="px-6 pt-12">
+      <nav aria-label={localizedLabels.navigation} className="px-6 pt-12">
         <ul className="flex flex-col">
           {items.map((item) => (
             <li key={item.href} className="border-b border-ink-900/[0.08] py-4">
-              <Link href={item.href} className={menuLink}>
+              <Link href={item.href} className={menuLink} onClick={onClose}>
                 {item.label}
               </Link>
             </li>
@@ -128,7 +216,7 @@ export function MobileMenu({
       </div>
 
       <div className="px-6 pt-8">
-        <Link href={cta.href} className={ctaLink}>
+        <Link href={cta.href} className={ctaLink} onClick={onClose}>
           {cta.label} <span aria-hidden="true">→</span>
         </Link>
       </div>

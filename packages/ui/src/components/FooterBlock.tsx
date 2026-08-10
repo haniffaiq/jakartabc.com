@@ -13,12 +13,19 @@ export type FooterBlockLegalLink = {
   href: string
 }
 
+export type FooterBlockLabels = {
+  office: string
+  contact: string
+  licenses: string
+}
+
 export type FooterBlockProps = {
   brand: string
   address: string[]
   email: string
   licenses: string[]
   legalLinks?: FooterBlockLegalLink[]
+  labels?: FooterBlockLabels
   variant?: 'light' | 'dark'
   className?: string
   Link?: React.ComponentType<FooterBlockLinkProps>
@@ -32,6 +39,12 @@ function DefaultLink({ href, className, children }: FooterBlockLinkProps) {
   )
 }
 
+const defaultLabels: FooterBlockLabels = {
+  office: 'Office',
+  contact: 'Contact',
+  licenses: 'Licenses',
+}
+
 const focusLink =
   'underline-offset-4 transition-colors duration-fast ease-out hover:underline ' +
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600'
@@ -42,6 +55,7 @@ export function FooterBlock({
   email,
   licenses,
   legalLinks = [],
+  labels = defaultLabels,
   variant = 'light',
   className,
   Link = DefaultLink,
@@ -74,7 +88,7 @@ export function FooterBlock({
 
         <div>
           <p className="mb-3 font-body text-eyebrow uppercase tracking-[0.08em] opacity-70">
-            Office
+            {labels.office}
           </p>
           <address className="space-y-1 text-body-md leading-relaxed not-italic">
             {address.map((line) => (
@@ -85,7 +99,7 @@ export function FooterBlock({
 
         <div>
           <p className="mb-3 font-body text-eyebrow uppercase tracking-[0.08em] opacity-70">
-            Contact
+            {labels.contact}
           </p>
           <a
             href={`mailto:${email}`}
@@ -101,7 +115,7 @@ export function FooterBlock({
 
         <div>
           <p className="mb-3 font-body text-eyebrow uppercase tracking-[0.08em] opacity-70">
-            Licenses
+            {labels.licenses}
           </p>
           <ul className="space-y-1 text-body-sm leading-relaxed">
             {licenses.map((license) => (

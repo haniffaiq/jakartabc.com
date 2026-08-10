@@ -7,6 +7,13 @@ export type NavBarItem = { label: string; href: string }
 export type NavBarCta = { label: string; href: string }
 export type NavBarLinkProps = { href: string; className?: string; children: React.ReactNode }
 
+export type NavBarLabels = {
+  navigation: string
+  openMenu: string
+  switchToEnglish: string
+  switchToIndonesian: string
+}
+
 export type NavBarProps = {
   brand: string
   items: NavBarItem[]
@@ -14,8 +21,26 @@ export type NavBarProps = {
   locale: 'en' | 'id'
   onLocaleChange: (next: 'en' | 'id') => void
   onMobileOpen: () => void
+  triggerRef?: React.RefObject<HTMLButtonElement | null>
+  labels?: NavBarLabels
   Link?: React.ComponentType<NavBarLinkProps>
   className?: string
+}
+
+function defaultLabels(locale: 'en' | 'id'): NavBarLabels {
+  return locale === 'id'
+    ? {
+        navigation: 'Navigasi utama',
+        openMenu: 'Buka menu',
+        switchToEnglish: 'Ganti ke bahasa Inggris',
+        switchToIndonesian: 'Ganti ke bahasa Indonesia',
+      }
+    : {
+        navigation: 'Primary',
+        openMenu: 'Open menu',
+        switchToEnglish: 'Switch to English',
+        switchToIndonesian: 'Switch to Indonesian',
+      }
 }
 
 function DefaultLink({ href, className, children }: NavBarLinkProps) {
@@ -33,11 +58,14 @@ export function NavBar({
   locale,
   onLocaleChange,
   onMobileOpen,
+  triggerRef,
+  labels,
   Link = DefaultLink,
   className,
 }: NavBarProps) {
   const [scrolled, setScrolled] = React.useState(false)
   const next: 'en' | 'id' = locale === 'en' ? 'id' : 'en'
+  const localizedLabels = labels ?? defaultLabels(locale)
 
   React.useEffect(() => {
     const update = () => setScrolled(window.scrollY > 4)
@@ -48,7 +76,7 @@ export function NavBar({
 
   return (
     <nav
-      aria-label="Primary"
+      aria-label={localizedLabels.navigation}
       className={cn(
         'sticky top-0 z-50 h-[64px] bg-bone-50/95 backdrop-blur-md transition-all duration-fast md:h-[72px]',
         scrolled ? 'border-b border-rule-soft shadow-sm' : 'border-b border-transparent',
@@ -80,7 +108,9 @@ export function NavBar({
           <button
             type="button"
             onClick={() => onLocaleChange(next)}
-            aria-label={`Switch to ${next === 'id' ? 'Indonesian' : 'English'}`}
+            aria-label={
+              next === 'id' ? localizedLabels.switchToIndonesian : localizedLabels.switchToEnglish
+            }
             className="text-eyebrow font-semibold uppercase tracking-[0.16em] text-ink-500 hover:text-navy-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600"
           >
             EN · ID
@@ -94,8 +124,9 @@ export function NavBar({
         </div>
 
         <button
+          ref={triggerRef}
           type="button"
-          aria-label="Open menu"
+          aria-label={localizedLabels.openMenu}
           onClick={onMobileOpen}
           className="text-navy-900 hover:text-navy-700 active:text-navy-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-navy-600 md:hidden"
         >

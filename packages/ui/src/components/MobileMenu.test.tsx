@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import * as React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { MobileMenu as ExportedMobileMenu } from '../index'
@@ -17,9 +18,17 @@ const baseProps = {
   onLocaleChange: () => {},
 }
 
-function TestLink({ href, className, children }: MobileMenuLinkProps) {
+function TestLink({ href, className, children, onClick }: MobileMenuLinkProps) {
   return (
-    <a href={`/en${href}`} className={className} data-testid="localized-link">
+    <a
+      href={`/en${href}`}
+      className={className}
+      data-testid="localized-link"
+      onClick={(event) => {
+        event.preventDefault()
+        onClick?.(event)
+      }}
+    >
       {children}
     </a>
   )
@@ -45,6 +54,55 @@ describe('MobileMenu', () => {
     expect(screen.getByRole('link', { name: 'Book consultation' })).toBeInTheDocument()
   })
 
+  it('focuses the close button when opened', () => {
+    render(<MobileMenu {...baseProps} open onClose={() => {}} />)
+
+    expect(screen.getByRole('button', { name: /close menu/i })).toHaveFocus()
+  })
+
+  it('wraps Tab and Shift+Tab within the dialog', () => {
+    render(<MobileMenu {...baseProps} open onClose={() => {}} />)
+
+    const first = screen.getByRole('button', { name: /close menu/i })
+    const last = screen.getByRole('link', { name: 'Book consultation' })
+
+    last.focus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(first).toHaveFocus()
+
+    first.focus()
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(last).toHaveFocus()
+  })
+
+  it('keeps focus stable when only one focusable control remains', () => {
+    render(<MobileMenu {...baseProps} open onClose={() => {}} />)
+
+    const close = screen.getByRole('button', { name: /close menu/i })
+    for (const element of screen.getAllByRole('link')) element.tabIndex = -1
+    for (const button of screen.getAllByRole('button')) {
+      if (button !== close) button.setAttribute('disabled', '')
+    }
+
+    close.focus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(close).toHaveFocus()
+
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(close).toHaveFocus()
+  })
+
+  it('falls back to the dialog when no focusable controls remain', () => {
+    render(<MobileMenu {...baseProps} open onClose={() => {}} />)
+
+    for (const element of screen.getAllByRole('link')) element.tabIndex = -1
+    for (const button of screen.getAllByRole('button')) button.setAttribute('disabled', '')
+
+    fireEvent.keyDown(document, { key: 'Tab' })
+
+    expect(screen.getByRole('dialog')).toHaveFocus()
+  })
+
   it('calls onClose from the close button and Escape key', () => {
     const onClose = vi.fn()
     render(<MobileMenu {...baseProps} open onClose={onClose} />)
@@ -55,6 +113,46 @@ describe('MobileMenu', () => {
     expect(onClose).toHaveBeenCalledTimes(2)
   })
 
+  it('calls onClose when any navigation or CTA link is selected', () => {
+    const onClose = vi.fn()
+    render(<MobileMenu {...baseProps} open onClose={onClose} Link={TestLink} />)
+
+    fireEvent.click(screen.getByRole('link', { name: 'Services' }))
+    fireEvent.click(screen.getByRole('link', { name: 'About' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Book consultation' }))
+
+    expect(onClose).toHaveBeenCalledTimes(3)
+  })
+
+  it('restores focus to the supplied trigger after closing', () => {
+    function Harness() {
+      const triggerRef = React.useRef<HTMLButtonElement>(null)
+      const [open, setOpen] = React.useState(false)
+
+      return (
+        <>
+          <button ref={triggerRef} type="button" onClick={() => setOpen(true)}>
+            Open navigation
+          </button>
+          <MobileMenu
+            {...baseProps}
+            open={open}
+            onClose={() => setOpen(false)}
+            triggerRef={triggerRef}
+          />
+        </>
+      )
+    }
+
+    render(<Harness />)
+    const trigger = screen.getByRole('button', { name: 'Open navigation' })
+
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: /close menu/i }))
+
+    expect(trigger).toHaveFocus()
+  })
+
   it('locks body scroll while open and restores it on close', () => {
     const { rerender } = render(<MobileMenu {...baseProps} open onClose={() => {}} />)
 
@@ -63,6 +161,36 @@ describe('MobileMenu', () => {
     rerender(<MobileMenu {...baseProps} open={false} onClose={() => {}} />)
 
     expect(document.body.style.overflow).toBe('')
+  })
+
+  it('restores body scroll through StrictMode remount cleanup', () => {
+    document.body.style.overflow = 'scroll'
+    const { unmount } = render(
+      <React.StrictMode>
+        <MobileMenu {...baseProps} open onClose={() => {}} />
+      </React.StrictMode>,
+    )
+
+    expect(document.body.style.overflow).toBe('hidden')
+
+    unmount()
+
+    expect(document.body.style.overflow).toBe('scroll')
+  })
+
+  it('uses supplied localized dialog labels', () => {
+    render(
+      <MobileMenu
+        {...baseProps}
+        open
+        onClose={() => {}}
+        labels={{ dialog: 'Menu utama', close: 'Tutup menu', navigation: 'Navigasi utama' }}
+      />,
+    )
+
+    expect(screen.getByRole('dialog', { name: 'Menu utama' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tutup menu' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Navigasi utama' })).toBeInTheDocument()
   })
 
   it('toggles locale to the opposite locale', () => {
