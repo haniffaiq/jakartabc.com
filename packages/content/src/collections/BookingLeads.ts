@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
 import { adminOnly } from '../access/roles'
+import { createSubmissionDeliveryFields } from '../fields/submissionDelivery'
 
 export const BookingLeads: CollectionConfig = {
   slug: 'booking-leads',
@@ -54,6 +55,7 @@ export const BookingLeads: CollectionConfig = {
       ],
     },
     { name: 'notes', type: 'textarea', admin: { description: 'Internal sales notes' } },
+    ...createSubmissionDeliveryFields(),
   ],
   timestamps: true,
 }
