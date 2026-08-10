@@ -1,4 +1,6 @@
 import type { GlobalConfig } from 'payload'
+import { siteTags } from '../cache/tags'
+import { makeGlobalRevalidateHook } from '../hooks/revalidate'
 
 export const SiteSettings: GlobalConfig = {
   slug: 'site-settings',
@@ -38,4 +40,7 @@ export const SiteSettings: GlobalConfig = {
       ],
     },
   ],
+  hooks: {
+    afterChange: [makeGlobalRevalidateHook(() => siteTags({ locales: ['en', 'id'] }))],
+  },
 }

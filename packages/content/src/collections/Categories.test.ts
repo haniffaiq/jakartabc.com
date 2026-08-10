@@ -25,4 +25,9 @@ describe('Categories collection', () => {
     expect(access.update?.(request('admin') as never)).toBe(true)
     expect(access.delete?.(request('client') as never)).toBe(false)
   })
+
+  it('revalidates dependent public content after changes and deletes', () => {
+    expect(Categories.hooks?.afterChange).toHaveLength(1)
+    expect(Categories.hooks?.afterDelete).toHaveLength(1)
+  })
 })

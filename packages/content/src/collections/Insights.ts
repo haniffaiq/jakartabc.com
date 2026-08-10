@@ -10,14 +10,36 @@ import { dropCap } from '../blocks/dropCap'
 import { pullQuote } from '../blocks/pullQuote'
 import { regulationCite } from '../blocks/regulationCite'
 import { editorialOnly, publishedOrEditorial } from '../access/roles'
+import { cacheTagIds, insightTags } from '../cache/tags'
 import { calcReadTime } from '../hooks/readTime'
+import { makeRevalidateDeleteHook, makeRevalidateHook } from '../hooks/revalidate'
+import { CONTENT_SLUG_MAX_LENGTH, validateContentSlug } from '../validation/contentSlug'
+
+type InsightTagDocument = {
+  slug?: string | null
+  author?: unknown
+  category?: unknown
+  coverImage?: unknown
+  regulationsCited?: unknown
+}
+
+const buildInsightTags = (doc: InsightTagDocument, previousDoc?: InsightTagDocument) =>
+  insightTags({
+    slug: doc.slug,
+    previousSlug: previousDoc?.slug,
+    locales: ['en', 'id'],
+    authorIds: cacheTagIds(doc.author, previousDoc?.author),
+    categoryIds: cacheTagIds(doc.category, previousDoc?.category),
+    regulationIds: cacheTagIds(doc.regulationsCited, previousDoc?.regulationsCited),
+    mediaIds: cacheTagIds(doc.coverImage, previousDoc?.coverImage),
+  })
 
 export const Insights: CollectionConfig = {
   slug: 'insights',
   admin: {
     group: 'Editorial',
     useAsTitle: 'title',
-    defaultColumns: ['title', 'status', 'publishedAt', 'category'],
+    defaultColumns: ['title', '_status', 'publishedAt', 'category'],
   },
   access: {
     create: editorialOnly,
@@ -27,7 +49,15 @@ export const Insights: CollectionConfig = {
   },
   versions: { drafts: true },
   fields: [
-    { name: 'slug', type: 'text', required: true, unique: true, index: true },
+    {
+      name: 'slug',
+      type: 'text',
+      required: true,
+      unique: true,
+      index: true,
+      maxLength: CONTENT_SLUG_MAX_LENGTH,
+      validate: validateContentSlug,
+    },
     { name: 'title', type: 'text', required: true, localized: true },
     { name: 'lead', type: 'textarea', required: true, localized: true },
     {
@@ -58,16 +88,6 @@ export const Insights: CollectionConfig = {
       },
     },
     {
-      name: 'status',
-      type: 'select',
-      required: true,
-      defaultValue: 'draft',
-      options: [
-        { label: 'Draft', value: 'draft' },
-        { label: 'Published', value: 'published' },
-      ],
-    },
-    {
       name: 'seo',
       type: 'group',
       localized: true,
@@ -78,6 +98,8 @@ export const Insights: CollectionConfig = {
     },
   ],
   hooks: {
+    afterChange: [makeRevalidateHook<InsightTagDocument>(buildInsightTags)],
+    afterDelete: [makeRevalidateDeleteHook<InsightTagDocument>((doc) => buildInsightTags(doc))],
     beforeChange: [
       ({ data }) => {
         if (data.body) {

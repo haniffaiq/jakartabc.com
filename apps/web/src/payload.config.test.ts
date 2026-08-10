@@ -1,9 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 const originalEnv = { ...process.env }
+type PayloadConfigModule = typeof import('./payload.config')
+let payloadModule: PayloadConfigModule
+let config: Awaited<PayloadConfigModule['default']>
 
-beforeEach(() => {
-  vi.resetModules()
+beforeAll(async () => {
   Object.assign(process.env, {
     DATABASE_URL: 'postgres://user:password@localhost:5432/jakartabc',
     REDIS_URL: 'redis://localhost:6379',
@@ -26,23 +28,21 @@ beforeEach(() => {
     TURNSTILE_SECRET_KEY: 'turnstile-secret',
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: 'turnstile-site-key',
   })
+
+  payloadModule = await import('./payload.config')
+  config = await payloadModule.default
 })
 
-afterEach(() => {
+afterAll(() => {
   process.env = { ...originalEnv }
 })
 
 describe('Payload MinIO storage', () => {
   it('aborts multipart parsing instead of accepting truncated files', async () => {
-    const payloadModule = await import('./payload.config')
-    const config = await payloadModule.default
-
     expect(config.upload).toMatchObject({ abortOnLimit: true, limits: { fileSize: 5_000_000 } })
   })
 
   it('disables local media storage through the official S3 adapter', async () => {
-    const payloadModule = await import('./payload.config')
-    const config = await payloadModule.default
     const media = config.collections?.find(({ slug }) => slug === 'media')
 
     expect(
@@ -51,7 +51,6 @@ describe('Payload MinIO storage', () => {
   })
 
   it('builds stable encoded public URLs under the media prefix', async () => {
-    const payloadModule = await import('./payload.config')
     const generateMediaFileURL = (payloadModule as Record<string, unknown>).generateMediaFileURL
 
     expect(typeof generateMediaFileURL).toBe('function')
@@ -92,5 +91,85 @@ describe('Payload MinIO storage', () => {
         }),
       ).toThrow(/filename/i)
     }
+  })
+})
+
+describe('Payload cache revalidation jobs', () => {
+  it('preserves the default jobs collection while restricting CRUD to admins', async () => {
+    const override = config.jobs?.jobsCollectionOverrides
+    const defaultJobsCollection = {
+      slug: 'payload-jobs',
+      admin: { group: 'System', hidden: true },
+      access: { read: () => true },
+      endpoints: [{ handler: vi.fn(), path: '/run', method: 'post' as const }],
+      fields: [{ name: 'input', type: 'json' as const }],
+      hooks: { beforeChange: [vi.fn()] },
+    }
+
+    expect(override).toBeTypeOf('function')
+    const overridden = override?.({ defaultJobsCollection })
+
+    expect(overridden?.slug).toBe(defaultJobsCollection.slug)
+    expect(overridden?.admin).toBe(defaultJobsCollection.admin)
+    expect(overridden?.endpoints).toBe(defaultJobsCollection.endpoints)
+    expect(overridden?.fields).toBe(defaultJobsCollection.fields)
+    expect(overridden?.hooks).toBe(defaultJobsCollection.hooks)
+
+    const requests = {
+      client: { req: { user: { role: 'client' } } },
+      editor: { req: { user: { role: 'editor' } } },
+      admin: { req: { user: { role: 'admin' } } },
+    } as const
+
+    for (const operation of ['create', 'read', 'update', 'delete'] as const) {
+      expect(overridden?.access?.[operation]?.(requests.client as never)).toBe(false)
+      expect(overridden?.access?.[operation]?.(requests.editor as never)).toBe(false)
+      expect(overridden?.access?.[operation]?.(requests.admin as never)).toBe(true)
+    }
+
+    // Task 14 regenerates the Payload collection union after the jobs migration.
+    const sanitized = config.collections?.find(({ slug }) => String(slug) === 'payload-jobs')
+    expect(sanitized).toBeDefined()
+    for (const operation of ['create', 'read', 'update', 'delete'] as const) {
+      expect(sanitized?.access?.[operation]?.(requests.client as never)).toBe(false)
+      expect(sanitized?.access?.[operation]?.(requests.editor as never)).toBe(false)
+      expect(sanitized?.access?.[operation]?.(requests.admin as never)).toBe(true)
+    }
+  })
+
+  it('restricts direct job control to admins', async () => {
+    const clientRequest = { req: { user: { role: 'client' } } } as never
+    const editorRequest = { req: { user: { role: 'editor' } } } as never
+    const adminRequest = { req: { user: { role: 'admin' } } } as never
+
+    expect(config.jobs?.access?.queue?.(clientRequest)).toBe(false)
+    expect(config.jobs?.access?.run?.(clientRequest)).toBe(false)
+    expect(config.jobs?.access?.cancel?.(clientRequest)).toBe(false)
+    expect(config.jobs?.access?.queue?.(editorRequest)).toBe(false)
+    expect(config.jobs?.access?.run?.(editorRequest)).toBe(false)
+    expect(config.jobs?.access?.cancel?.(editorRequest)).toBe(false)
+    expect(config.jobs?.access?.queue?.(adminRequest)).toBe(true)
+    expect(config.jobs?.access?.run?.(adminRequest)).toBe(true)
+    expect(config.jobs?.access?.cancel?.(adminRequest)).toBe(true)
+  })
+
+  it('registers the retrying task with a bounded dedicated autorun queue', async () => {
+    const task = config.jobs?.tasks?.find(({ slug }) => slug === 'revalidate-cache')
+
+    expect(task).toMatchObject({
+      retries: {
+        attempts: 3,
+        backoff: { delay: 1_000, type: 'exponential' },
+      },
+      slug: 'revalidate-cache',
+    })
+    expect(config.jobs?.autoRun).toEqual([
+      {
+        cron: '*/10 * * * * *',
+        disableScheduling: true,
+        limit: 10,
+        queue: 'cache-revalidation',
+      },
+    ])
   })
 })

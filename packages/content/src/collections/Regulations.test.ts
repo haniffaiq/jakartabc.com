@@ -35,4 +35,9 @@ describe('Regulations collection', () => {
     expect(access.update?.(request('editor') as never)).toBe(true)
     expect(access.delete?.(request('client') as never)).toBe(false)
   })
+
+  it('revalidates dependent public content after changes and deletes', () => {
+    expect(Regulations.hooks?.afterChange).toHaveLength(1)
+    expect(Regulations.hooks?.afterDelete).toHaveLength(1)
+  })
 })

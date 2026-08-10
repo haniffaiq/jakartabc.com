@@ -1,4 +1,5 @@
 import type { GlobalConfig } from 'payload'
+import { siteTags } from '../cache/tags'
 import { makeGlobalRevalidateHook } from '../hooks/revalidate'
 
 export const NavMenu: GlobalConfig = {
@@ -17,6 +18,6 @@ export const NavMenu: GlobalConfig = {
     },
   ],
   hooks: {
-    afterChange: [makeGlobalRevalidateHook(() => ['site:nav'])],
+    afterChange: [makeGlobalRevalidateHook(() => siteTags({ locales: ['en', 'id'] }))],
   },
 }

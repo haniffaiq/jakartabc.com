@@ -93,6 +93,13 @@ describe('Media collection', () => {
     expect(access.delete?.(request('client') as never)).toBe(false)
   })
 
+  it('preserves upload guards and revalidates dependents after durable mutations', () => {
+    expect(Media.hooks?.beforeOperation).toHaveLength(1)
+    expect(Media.hooks?.beforeChange).toHaveLength(1)
+    expect(Media.hooks?.afterChange).toHaveLength(1)
+    expect(Media.hooks?.afterDelete).toHaveLength(1)
+  })
+
   it('validates bytes before Payload probes image dimensions', () => {
     expect(typeof (mediaModule as Record<string, unknown>).validateMediaFile).toBe('function')
     expect(Media.hooks?.beforeOperation).toHaveLength(1)

@@ -34,4 +34,9 @@ describe('Authors collection', () => {
     expect(access.update?.(request('editor') as never)).toBe(true)
     expect(access.delete?.(request('client') as never)).toBe(false)
   })
+
+  it('revalidates dependent public content after changes and deletes', () => {
+    expect(Authors.hooks?.afterChange).toHaveLength(1)
+    expect(Authors.hooks?.afterDelete).toHaveLength(1)
+  })
 })

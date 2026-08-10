@@ -16,8 +16,11 @@ import {
   Services,
   SiteSettings,
   Users,
+  adminOnly,
 } from '@jakartabc/content'
 import { getMediaStoragePath, Media } from '@jakartabc/content/collections/Media'
+import { revalidateCacheTask } from '@jakartabc/content/cache/revalidateTask'
+import { REVALIDATE_CACHE_QUEUE } from '@jakartabc/content/hooks/revalidate'
 import { env } from './env'
 
 const filename = fileURLToPath(import.meta.url)
@@ -62,6 +65,33 @@ export default buildConfig({
     Users,
   ],
   globals: [SiteSettings, NavMenu, Footer],
+  jobs: {
+    access: {
+      cancel: adminOnly,
+      queue: adminOnly,
+      run: adminOnly,
+    },
+    autoRun: [
+      {
+        cron: '*/10 * * * * *',
+        disableScheduling: true,
+        limit: 10,
+        queue: REVALIDATE_CACHE_QUEUE,
+      },
+    ],
+    deleteJobOnComplete: true,
+    jobsCollectionOverrides: ({ defaultJobsCollection }) => ({
+      ...defaultJobsCollection,
+      access: {
+        ...defaultJobsCollection.access,
+        create: adminOnly,
+        delete: adminOnly,
+        read: adminOnly,
+        update: adminOnly,
+      },
+    }),
+    tasks: [revalidateCacheTask],
+  },
   plugins: [
     s3Storage({
       alwaysInsertFields: true,

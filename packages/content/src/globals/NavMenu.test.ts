@@ -9,7 +9,7 @@ describe('NavMenu global', () => {
     expect(items.localized).toBe(true)
   })
 
-  it('defines label href external fields and site nav revalidate hook', () => {
+  it('defines label href external fields and site revalidate hook', () => {
     const items = (NavMenu.fields as any[]).find((f) => f.name === 'items')
     const fieldNames = items.fields.map((field: { name: string }) => field.name)
 

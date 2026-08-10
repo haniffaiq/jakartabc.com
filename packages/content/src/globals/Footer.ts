@@ -1,5 +1,6 @@
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import type { GlobalConfig } from 'payload'
+import { siteTags } from '../cache/tags'
 import { makeGlobalRevalidateHook } from '../hooks/revalidate'
 
 export const isSafeFooterHref = (value: unknown) => {
@@ -20,7 +21,10 @@ export const isSafeFooterHref = (value: unknown) => {
     }
 
     const url = new URL(href)
-    return ['https:', 'http:', 'mailto:'].includes(url.protocol) || 'Use a relative, http(s), or mailto link.'
+    return (
+      ['https:', 'http:', 'mailto:'].includes(url.protocol) ||
+      'Use a relative, http(s), or mailto link.'
+    )
   } catch {
     return 'Use a relative, http(s), or mailto link.'
   }
@@ -58,6 +62,6 @@ export const Footer: GlobalConfig = {
     { name: 'notice', type: 'richText', localized: true, editor: lexicalEditor({}) },
   ],
   hooks: {
-    afterChange: [makeGlobalRevalidateHook(() => ['site:footer'])],
+    afterChange: [makeGlobalRevalidateHook(() => siteTags({ locales: ['en', 'id'] }))],
   },
 }

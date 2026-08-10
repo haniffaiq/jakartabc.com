@@ -1,6 +1,13 @@
 import type { CollectionConfig } from 'payload'
 
 import { editorialOnly } from '../access/roles'
+import { authorTags, type CacheTagId } from '../cache/tags'
+import { makeRevalidateDeleteHook, makeRevalidateHook } from '../hooks/revalidate'
+
+type AuthorTagDocument = { id?: CacheTagId }
+
+const buildAuthorTags = (doc: AuthorTagDocument, previousDoc?: AuthorTagDocument) =>
+  authorTags({ id: doc.id, previousId: previousDoc?.id, locales: ['en', 'id'] })
 
 export const Authors: CollectionConfig = {
   slug: 'authors',
@@ -23,4 +30,8 @@ export const Authors: CollectionConfig = {
     { name: 'linkedinUrl', type: 'text' },
     { name: 'email', type: 'email' },
   ],
+  hooks: {
+    afterChange: [makeRevalidateHook<AuthorTagDocument>(buildAuthorTags)],
+    afterDelete: [makeRevalidateDeleteHook<AuthorTagDocument>((doc) => buildAuthorTags(doc))],
+  },
 }
