@@ -89,6 +89,10 @@ function deliveryState(document: BookingLeadDoc): DeliveryStatus | null {
   return value === 'pending' || value === 'sent' || value === 'failed' ? value : null
 }
 
+function canResumeBeforeOwnerAttempt(document: BookingLeadDoc) {
+  return deliveryState(document) === 'pending' && document.deliveryAttempts === 0
+}
+
 async function releaseLease(lease: SubmissionLease) {
   try {
     const result = await submissionCoordinator.release(lease)
@@ -313,40 +317,50 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
     await releaseLease(lease)
     return operationalFailure(data.submissionId, 'submission-lookup-failed')
   }
-  if (existing) return reconcileExisting(existing, lease, data.submissionId)
+  let lead = existing
+  if (lead && !canResumeBeforeOwnerAttempt(lead)) {
+    return reconcileExisting(lead, lease, data.submissionId)
+  }
 
-  let lead: BookingLeadDoc
-  try {
-    lead = await payload.create({
-      collection: 'booking-leads',
-      overrideAccess: true,
-      data: {
-        submissionId: data.submissionId,
-        name: data.name,
-        email: data.email,
-        company: data.company || undefined,
-        phone: data.phone || undefined,
-        service: service.id,
-        preferredWindows: data.preferredWindows,
-        message: data.message,
-        locale: data.locale,
-        status: 'new',
-        deliveryStatus: 'pending',
-        deliveryAttempts: 0,
-        lastDeliveryAttemptAt: null,
-        deliveredAt: null,
-        deliveryError: null,
-      },
-    })
-  } catch {
+  if (!lead) {
     try {
-      const raced = await findBookingBySubmissionId(payload, data.submissionId)
-      if (raced) return reconcileExisting(raced, lease, data.submissionId)
+      lead = await payload.create({
+        collection: 'booking-leads',
+        overrideAccess: true,
+        data: {
+          submissionId: data.submissionId,
+          name: data.name,
+          email: data.email,
+          company: data.company || undefined,
+          phone: data.phone || undefined,
+          service: service.id,
+          preferredWindows: data.preferredWindows,
+          message: data.message,
+          locale: data.locale,
+          status: 'new',
+          deliveryStatus: 'pending',
+          deliveryAttempts: 0,
+          lastDeliveryAttemptAt: null,
+          deliveredAt: null,
+          deliveryError: null,
+        },
+      })
     } catch {
-      // A stable event below covers both create and reconciliation lookup failures.
+      let raced: BookingLeadDoc | undefined
+      try {
+        raced = await findBookingBySubmissionId(payload, data.submissionId)
+      } catch {
+        // A stable event below covers both create and reconciliation lookup failures.
+      }
+      if (!raced) {
+        await releaseLease(lease)
+        return operationalFailure(data.submissionId, 'submission-create-failed')
+      }
+      if (!canResumeBeforeOwnerAttempt(raced)) {
+        return reconcileExisting(raced, lease, data.submissionId)
+      }
+      lead = raced
     }
-    await releaseLease(lease)
-    return operationalFailure(data.submissionId, 'submission-create-failed')
   }
 
   const attemptedAt = new Date()

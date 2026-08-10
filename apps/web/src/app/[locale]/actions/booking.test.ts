@@ -381,6 +381,56 @@ describe('submitBooking', () => {
     }
   })
 
+  it('safely resumes an existing pending row before its first owner attempt', async () => {
+    findMock
+      .mockResolvedValueOnce({ docs: [{ id: 1, name: 'PT PMA Setup' }] })
+      .mockResolvedValueOnce({ docs: [bookingRow('pending', 0)] })
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: true,
+      submissionId: SUBMISSION_ID,
+      delivery: 'sent',
+    })
+    expect(createMock).not.toHaveBeenCalled()
+    expect(updateMock).toHaveBeenCalledTimes(2)
+    expect(updateMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        id: 42,
+        data: expect.objectContaining({
+          deliveryStatus: 'pending',
+          deliveryAttempts: 1,
+        }),
+      }),
+    )
+    expect(sendMock.mock.calls.filter(([mail]) => mail.to === 'sales@example.co')).toHaveLength(1)
+    expect(completeMock).toHaveBeenCalledWith(LEASE)
+  })
+
+  it('retries a stranded row after its original pending update failed before owner send', async () => {
+    const service = { docs: [{ id: 1, name: 'PT PMA Setup' }] }
+    findMock
+      .mockResolvedValueOnce(service)
+      .mockResolvedValueOnce({ docs: [] })
+      .mockResolvedValueOnce(service)
+      .mockResolvedValueOnce({ docs: [bookingRow('pending', 0)] })
+    updateMock.mockRejectedValueOnce(new Error('database unavailable before owner send'))
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(await submitBooking(fd())).toEqual({
+      ok: true,
+      submissionId: SUBMISSION_ID,
+      delivery: 'sent',
+    })
+    expect(createMock).toHaveBeenCalledTimes(1)
+    expect(releaseMock).toHaveBeenCalledTimes(1)
+    expect(sendMock.mock.calls.filter(([mail]) => mail.to === 'sales@example.co')).toHaveLength(1)
+    expect(completeMock).toHaveBeenCalledTimes(1)
+  })
+
   it('creates one row and sends one owner email for concurrent identical submissions', async () => {
     acquireMock
       .mockResolvedValueOnce({ state: 'acquired', lease: LEASE })
