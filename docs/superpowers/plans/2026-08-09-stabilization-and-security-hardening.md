@@ -1028,6 +1028,10 @@ git commit -m "fix: make mobile navigation keyboard complete"
 
 **Parallel ownership:** Wave 3, Worker A. Own only contact collection/action/tests.
 
+**Shared prerequisite:** Import the already-landed delivery field factory from
+`packages/content/src/fields/submissionDelivery.ts` and delivery transitions from
+`apps/web/src/lib/submissions/delivery.ts`. Do not recreate or fork these helpers in this lane.
+
 **Files:**
 
 - Modify: `packages/content/src/collections/ContactMessages.ts`
@@ -1069,7 +1073,10 @@ Expected: FAIL because access, fields, async coordination, and delivery behavior
 
 - [ ] **Step 4: Add additive fields and deny direct writes**
 
-Add `submissionId`, `deliveryStatus`, `deliveryAttempts`, `lastDeliveryAttemptAt`, `deliveredAt`, and bounded `deliveryError`. Keep `submissionId` nullable until the cleanup release. Admin UI may read delivery fields but secrets/tokens are never stored.
+Spread a fresh result from `createSubmissionDeliveryFields()` into the collection. It adds
+`submissionId`, `deliveryStatus`, `deliveryAttempts`, `lastDeliveryAttemptAt`, `deliveredAt`, and
+bounded `deliveryError`. Keep `submissionId` nullable until the cleanup release. Admin UI may read
+delivery fields but secrets/tokens are never stored.
 
 - [ ] **Step 5: Implement the ordered transaction flow**
 
@@ -1077,7 +1084,9 @@ Validate, honeypot, trusted IP, Turnstile, Redis limit, acquire ID, create/find 
 
 - [ ] **Step 6: Sanitize delivery errors**
 
-Store a maximum 500-character provider error class/message with email addresses, tokens, URLs containing credentials, and message content removed. Structured logs use submission ID and event name only.
+Use the shared delivery attempt/transitions and sanitizer. Store at most its stable 500-character
+event/error-class value; never store the raw provider message, email addresses, tokens, credential
+or query URLs, or visitor content. Structured logs use submission ID and event name only.
 
 - [ ] **Step 7: Verify and commit**
 
@@ -1093,6 +1102,9 @@ git commit -m "fix: make contact acceptance idempotent"
 ## Task 12: Make booking submissions durable and idempotent
 
 **Parallel ownership:** Wave 3, Worker B. Own only booking collection/action/tests.
+
+**Shared prerequisite:** Reuse the same already-landed field factory and web delivery helpers as
+Task 11. Do not edit those shared files from this parallel lane.
 
 **Files:**
 
@@ -1117,7 +1129,10 @@ Expected: FAIL for direct create access, fields, duplicate prevention, and mail 
 
 - [ ] **Step 4: Implement the same locked contract**
 
-Use scope `booking`, the shared async coordinator, trusted client IP, explicit Local API `overrideAccess: true`, unique submission lookup, and delivery transitions. Do not duplicate Redis, error-redaction, or email-transition helpers inside the action; import the shared interfaces locked above.
+Use scope `booking`, the shared async coordinator, trusted client IP, explicit Local API
+`overrideAccess: true`, unique submission lookup, a fresh `createSubmissionDeliveryFields()` result,
+and the shared delivery transitions. Do not duplicate Redis, error-redaction, field, or
+email-transition helpers inside the action; import the shared interfaces locked above.
 
 - [ ] **Step 5: Verify and commit**
 
@@ -1193,8 +1208,8 @@ git commit -m "fix: preserve Insight cache and error semantics"
 
 **Files:**
 
-- Create: `apps/web/src/lib/submissions/delivery.ts`
-- Create: `apps/web/src/lib/submissions/delivery.test.ts`
+- Modify/extend: `apps/web/src/lib/submissions/delivery.ts`
+- Modify/extend: `apps/web/src/lib/submissions/delivery.test.ts`
 - Create: `apps/web/src/scripts/retry-failed-deliveries.ts`
 - Create: `apps/web/src/scripts/retry-failed-deliveries.test.ts`
 - Modify: `apps/web/package.json`
@@ -1205,6 +1220,9 @@ git commit -m "fix: preserve Insight cache and error semantics"
 - Modify: `apps/web/src/app/(payload)/admin/importMap.ts`
 
 - [ ] **Step 1: Write delivery transition tests**
+
+Extend the existing pure delivery-helper suite with retry claim behavior. Keep its established
+attempt counting, deterministic clock, immutable transition, and sanitized-error contracts intact.
 
 ```ts
 it('allows one retry worker to claim a failed delivery', async () => {
@@ -1220,7 +1238,7 @@ Add failed-to-sent, failed-to-failed attempt increment, already-sent no-op, miss
 
 Run: `pnpm --filter @jakartabc/web test src/lib/submissions/delivery.test.ts src/scripts/retry-failed-deliveries.test.ts`
 
-Expected: FAIL because retry modules do not exist.
+Expected: FAIL because the retry command and conditional claim behavior do not exist yet.
 
 - [ ] **Step 3: Implement conditional claim and retry command**
 
