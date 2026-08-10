@@ -27,6 +27,7 @@ describe('portal Payload runtime configuration', () => {
     expect(runtimeConfig.serverURL).toBe(mocks.env.NEXT_PUBLIC_PORTAL_URL)
     expect(mocks.postgresAdapter).toHaveBeenCalledWith({
       pool: { connectionString: mocks.env.DATABASE_URL },
+      push: false,
     })
   })
 
