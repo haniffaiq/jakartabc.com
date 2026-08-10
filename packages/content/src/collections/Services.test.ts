@@ -29,6 +29,20 @@ describe('Services collection', () => {
     )
   })
 
+  it('uses the bounded canonical content slug contract', () => {
+    const slug = (
+      Services.fields as {
+        name?: string
+        maxLength?: number
+        validate?: (value: unknown) => true | string
+      }[]
+    ).find((field) => field.name === 'slug')
+
+    expect(slug?.maxLength).toBe(128)
+    expect(slug?.validate?.('work-permit')).toBe(true)
+    expect(slug?.validate?.('Work Permit')).toEqual(expect.any(String))
+  })
+
   it('pricing has govFee/ourFee/currency', () => {
     const pricing = (Services.fields as { name?: string; fields?: { name?: string }[] }[]).find(
       (field) => field.name === 'pricing',

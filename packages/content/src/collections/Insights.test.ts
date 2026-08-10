@@ -9,8 +9,10 @@ const request = (role?: 'admin' | 'editor' | 'client') => ({
 type FieldLike = {
   name?: string
   localized?: boolean
+  maxLength?: number
   unique?: boolean
   relationTo?: string | string[]
+  validate?: (value: unknown) => true | string
 }
 
 describe('Insights collection', () => {
@@ -45,11 +47,14 @@ describe('Insights collection', () => {
     }
   })
 
-  it('keeps slug global and unique', () => {
+  it('keeps slug global, unique, bounded, and validated', () => {
     const slug = (Insights.fields as FieldLike[]).find((field) => field.name === 'slug')
 
     expect(slug?.localized).toBeFalsy()
     expect(slug?.unique).toBe(true)
+    expect(slug?.maxLength).toBe(128)
+    expect(slug?.validate?.('pt-pma-setup')).toBe(true)
+    expect(slug?.validate?.(' PT-PMA-SETUP ')).toEqual(expect.any(String))
   })
 
   it('relates to editorial taxonomies and supporting collections', () => {

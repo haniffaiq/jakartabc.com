@@ -1275,10 +1275,13 @@ Run the configured migrate-up, assertions, migrate-down, and migrate-up
 sequence. Query row counts, statuses, and media prefixes before/after. Expected:
 counts unchanged; publication state equivalent; one unique submission
 constraint per lead table; every migrated media row has `prefix = 'media'`;
-and a new media row receives the `media` database default. Also enqueue one
-revalidation job inside a rolled-back transaction and assert it is absent,
-then enqueue/commit another job, assert it becomes visible, run the dedicated
-worker, and assert successful completion removes it.
+and a new media row receives the `media` database default. Before migration,
+query every Insight and Service slug and assert it is at most 128 characters
+and already lowercase kebab-case; abort and report invalid rows instead of
+silently transforming them. Repeat the slug assertion after migration. Also
+enqueue one revalidation job inside a rolled-back transaction and assert it is
+absent, then enqueue/commit another job, assert it becomes visible, run the
+dedicated worker, and assert successful completion removes it.
 
 - [ ] **Step 9: Verify and commit the artifact barrier**
 

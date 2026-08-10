@@ -80,6 +80,16 @@ export default buildConfig({
       },
     ],
     deleteJobOnComplete: true,
+    jobsCollectionOverrides: ({ defaultJobsCollection }) => ({
+      ...defaultJobsCollection,
+      access: {
+        ...defaultJobsCollection.access,
+        create: adminOnly,
+        delete: adminOnly,
+        read: adminOnly,
+        update: adminOnly,
+      },
+    }),
     tasks: [revalidateCacheTask],
   },
   plugins: [

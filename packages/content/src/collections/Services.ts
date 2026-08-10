@@ -4,6 +4,7 @@ import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { editorialOnly } from '../access/roles'
 import { cacheTagIds, serviceTags } from '../cache/tags'
 import { makeRevalidateDeleteHook, makeRevalidateHook } from '../hooks/revalidate'
+import { CONTENT_SLUG_MAX_LENGTH, validateContentSlug } from '../validation/contentSlug'
 
 type ServiceTagDocument = {
   slug?: string | null
@@ -33,7 +34,15 @@ export const Services: CollectionConfig = {
   },
   defaultSort: 'order',
   fields: [
-    { name: 'slug', type: 'text', required: true, unique: true, index: true },
+    {
+      name: 'slug',
+      type: 'text',
+      required: true,
+      unique: true,
+      index: true,
+      maxLength: CONTENT_SLUG_MAX_LENGTH,
+      validate: validateContentSlug,
+    },
     { name: 'order', type: 'number', required: true, defaultValue: 100 },
     { name: 'name', type: 'text', required: true, localized: true },
     { name: 'timelineLabel', type: 'text', required: true, localized: true },

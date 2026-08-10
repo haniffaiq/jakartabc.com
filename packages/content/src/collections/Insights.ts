@@ -13,6 +13,7 @@ import { editorialOnly, publishedOrEditorial } from '../access/roles'
 import { cacheTagIds, insightTags } from '../cache/tags'
 import { calcReadTime } from '../hooks/readTime'
 import { makeRevalidateDeleteHook, makeRevalidateHook } from '../hooks/revalidate'
+import { CONTENT_SLUG_MAX_LENGTH, validateContentSlug } from '../validation/contentSlug'
 
 type InsightTagDocument = {
   slug?: string | null
@@ -48,7 +49,15 @@ export const Insights: CollectionConfig = {
   },
   versions: { drafts: true },
   fields: [
-    { name: 'slug', type: 'text', required: true, unique: true, index: true },
+    {
+      name: 'slug',
+      type: 'text',
+      required: true,
+      unique: true,
+      index: true,
+      maxLength: CONTENT_SLUG_MAX_LENGTH,
+      validate: validateContentSlug,
+    },
     { name: 'title', type: 'text', required: true, localized: true },
     { name: 'lead', type: 'textarea', required: true, localized: true },
     {
