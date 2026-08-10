@@ -86,6 +86,13 @@ const validContact = {
   hp: '',
   turnstileToken: 'turnstile-token',
 }
+const persistedContactFields = {
+  name: validContact.name,
+  email: 'sari@example.com',
+  company: validContact.company,
+  message: validContact.message,
+  locale: validContact.locale,
+}
 
 const trustedProxySecret = 'proxy-secret-value-that-is-at-least-32-characters'
 const lease = Object.freeze({ submissionId, token: 'lease-token' })
@@ -365,6 +372,7 @@ describe('submitContact', () => {
       submissionId,
       deliveryStatus: 'pending',
       deliveryAttempts: 0,
+      ...persistedContactFields,
     })
 
     const result = await submitContact(fd(validContact))
@@ -385,6 +393,127 @@ describe('submitContact', () => {
       mocks.sendEmail.mock.calls.filter(([message]) => message.to === 'sales@example.com'),
     ).toHaveLength(1)
     expect(mocks.complete).toHaveBeenCalledWith(lease)
+  })
+
+  it('uses only the persisted contact when a different retry resumes delivery', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const original = {
+      ...validContact,
+      name: 'Original Contact',
+      email: 'ORIGINAL@EXAMPLE.COM',
+      company: 'Original Company',
+      message: 'Original confidential contact message for the sales team.',
+      locale: 'en',
+    }
+    const retry = {
+      ...validContact,
+      name: 'Retry Attacker',
+      email: 'RETRY@EXAMPLE.COM',
+      company: 'Retry Company',
+      message: 'Different retry content must never enter either outbound email.',
+      locale: 'id',
+    }
+    mocks.update.mockRejectedValueOnce(new Error('pending persistence unavailable'))
+
+    expect(await submitContact(fd(original))).toEqual({ ok: false, code: 'persistence' })
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(rows.get(submissionId)).toMatchObject({
+      name: 'Original Contact',
+      email: 'original@example.com',
+      company: 'Original Company',
+      message: 'Original confidential contact message for the sales team.',
+      locale: 'en',
+      deliveryStatus: 'pending',
+      deliveryAttempts: 0,
+    })
+
+    expect(await submitContact(fd(retry))).toEqual({
+      ok: true,
+      submissionId,
+      delivery: 'sent',
+    })
+
+    const ownerMail = mocks.sendEmail.mock.calls.find(
+      ([message]) => message.to === 'sales@example.com',
+    )?.[0]
+    const visitorMail = mocks.sendEmail.mock.calls.find(
+      ([message]) => message.to === 'original@example.com',
+    )?.[0]
+    expect(ownerMail).toMatchObject({
+      subject: '[Contact] Original Contact',
+      text: expect.stringContaining('Original confidential contact message'),
+    })
+    expect(ownerMail.text).toContain('original@example.com')
+    expect(ownerMail.text).toContain('Original Company')
+    expect(JSON.stringify(ownerMail)).not.toContain('Retry Attacker')
+    expect(JSON.stringify(ownerMail)).not.toContain('retry@example.com')
+    expect(JSON.stringify(ownerMail)).not.toContain('Different retry content')
+    expect(visitorMail).toMatchObject({
+      to: 'original@example.com',
+      subject: 'Thanks for reaching out — Jakarta Business Center',
+      text: expect.stringContaining('Hi Original Contact'),
+    })
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(2)
+    expect(rows.get(submissionId)).toMatchObject({
+      name: 'Original Contact',
+      email: 'original@example.com',
+      message: 'Original confidential contact message for the sales team.',
+      deliveryStatus: 'sent',
+      deliveryAttempts: 1,
+    })
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain('pending persistence unavailable')
+  })
+
+  it.each([
+    [
+      'missing email',
+      { name: 'Stored Contact', message: 'Stored valid contact message.', locale: 'en' },
+    ],
+    [
+      'malformed locale',
+      {
+        name: 'Stored Contact',
+        email: 'stored@example.com',
+        message: 'Stored valid contact message.',
+        locale: 'fr',
+      },
+    ],
+  ])('fails closed for a %s on an untouched persisted row', async (_case, persistedFields) => {
+    rows.set(submissionId, {
+      id: 27,
+      submissionId,
+      deliveryStatus: 'pending',
+      deliveryAttempts: 0,
+      ...persistedFields,
+    })
+
+    expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.release).toHaveBeenCalledWith(lease)
+  })
+
+  it('accepts Payload null for the optional persisted company', async () => {
+    rows.set(submissionId, {
+      id: 28,
+      submissionId,
+      deliveryStatus: 'pending',
+      deliveryAttempts: 0,
+      ...persistedContactFields,
+      company: null,
+    })
+
+    expect(await submitContact(fd(validContact))).toEqual({
+      ok: true,
+      submissionId,
+      delivery: 'sent',
+    })
+    const ownerMail = mocks.sendEmail.mock.calls.find(
+      ([message]) => message.to === 'sales@example.com',
+    )?.[0]
+    expect(ownerMail.text).not.toContain('null')
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(2)
   })
 
   it('keeps an attempted pending row neutral and never resends owner email', async () => {
@@ -413,6 +542,7 @@ describe('submitContact', () => {
       submissionId,
       deliveryStatus: 'pending',
       deliveryAttempts: 0,
+      ...persistedContactFields,
     })
 
     const results = await Promise.all([

@@ -39,6 +39,11 @@ export type SubmitResult =
 type ContactDocument = {
   id: string | number
   submissionId?: string | null
+  name?: unknown
+  email?: unknown
+  company?: unknown
+  message?: unknown
+  locale?: unknown
   deliveryStatus?: DeliveryStatus | null
   deliveryAttempts?: number | null
   lastDeliveryAttemptAt?: string | null
@@ -65,6 +70,14 @@ type ContactPayloadClient = {
     overrideAccess: true
   }) => Promise<ContactDocument>
 }
+
+const contactDeliverySourceSchema = contactSchema.pick({
+  name: true,
+  email: true,
+  company: true,
+  message: true,
+  locale: true,
+})
 
 function optionalCompany(company: string | undefined) {
   const trimmed = company?.trim() ?? ''
@@ -247,7 +260,7 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
     return { ok: false, code: 'persistence' }
   }
 
-  const company = optionalCompany(data.company)
+  const submittedCompany = optionalCompany(data.company)
   let document: ContactDocument
   if (existing) {
     if (!isUntouchedPending(existing)) {
@@ -265,7 +278,7 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
           deliveryAttempts: 0,
           name: data.name,
           email: data.email,
-          company,
+          company: submittedCompany,
           message: data.message,
           locale: data.locale,
           status: 'new',
@@ -292,6 +305,21 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
       }
     }
   }
+
+  const deliverySource = contactDeliverySourceSchema.safeParse({
+    name: document.name,
+    email: document.email,
+    company: document.company ?? undefined,
+    message: document.message,
+    locale: document.locale,
+  })
+  if (!deliverySource.success) {
+    await releaseLease(lease)
+    logEvent('error', 'persisted-contact-delivery-source-invalid', data.submissionId)
+    return { ok: false, code: 'persistence' }
+  }
+  const deliveryData = deliverySource.data
+  const company = optionalCompany(deliveryData.company)
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'
   const currentAttempts = document.deliveryAttempts ?? 0
@@ -327,19 +355,19 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
         const salesHtml = await render(
           React.createElement(ContactSales, {
             messageId: document.id,
-            name: data.name,
-            email: data.email,
+            name: deliveryData.name,
+            email: deliveryData.email,
             company,
-            message: data.message,
-            locale: data.locale,
+            message: deliveryData.message,
+            locale: deliveryData.locale,
             siteUrl,
           }),
         )
         return sendEmail({
           to: salesEmail,
-          subject: subjects.contactSales(data.name),
+          subject: subjects.contactSales(deliveryData.name),
           html: salesHtml,
-          text: `${data.name} <${data.email}>${company ? `\n${company}` : ''}\n\n${data.message}`,
+          text: `${deliveryData.name} <${deliveryData.email}>${company ? `\n${company}` : ''}\n\n${deliveryData.message}`,
         })
       },
     })
@@ -371,19 +399,19 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
   try {
     const visitorHtml = await render(
       React.createElement(ContactVisitor, {
-        name: data.name,
-        locale: data.locale,
+        name: deliveryData.name,
+        locale: deliveryData.locale,
         replyEmail: process.env.EMAIL_FROM ?? 'hello@jakartabc.com',
       }),
     )
     const visitorResult = await sendEmail({
-      to: data.email,
-      subject: subjects.contactVisitor[data.locale],
+      to: deliveryData.email,
+      subject: subjects.contactVisitor[deliveryData.locale],
       html: visitorHtml,
       text:
-        data.locale === 'id'
-          ? `Halo ${data.name},\n\nKami menerima pesan Anda dan akan membalas dalam 1 hari kerja. Bila mendesak, silakan kirim ke alamat di bawah.`
-          : `Hi ${data.name},\n\nWe received your message and will reply within one business day. If urgent, you can also write directly to the address below.`,
+        deliveryData.locale === 'id'
+          ? `Halo ${deliveryData.name},\n\nKami menerima pesan Anda dan akan membalas dalam 1 hari kerja. Bila mendesak, silakan kirim ke alamat di bawah.`
+          : `Hi ${deliveryData.name},\n\nWe received your message and will reply within one business day. If urgent, you can also write directly to the address below.`,
     })
     if (!visitorResult.ok) {
       logEvent('warn', 'visitor-confirmation-failed', data.submissionId)
