@@ -82,7 +82,7 @@ describe('seedInsights', () => {
       expect.objectContaining({
         collection: 'insights',
         locale: 'en',
-        draft: true,
+        draft: false,
         data: expect.objectContaining({
           slug: 'bkpm-reg-5-2025-what-changes',
           category: 'category-regulation',
@@ -100,7 +100,7 @@ describe('seedInsights', () => {
         INSIGHT_ARTICLE_SEEDS.map((article) =>
           expect.objectContaining({
             locale: 'en',
-            draft: true,
+            draft: false,
             data: expect.objectContaining({ slug: article.slug, _status: 'published' }),
           }),
         ),
@@ -113,7 +113,7 @@ describe('seedInsights', () => {
       expect.objectContaining({
         collection: 'insights',
         locale: 'id',
-        draft: true,
+        draft: false,
         data: expect.objectContaining({
           title: 'Cicilan PPh 25: panduan untuk investor asing',
           body: expect.objectContaining({ root: expect.any(Object) }),

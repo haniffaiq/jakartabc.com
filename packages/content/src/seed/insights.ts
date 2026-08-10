@@ -253,10 +253,11 @@ export async function seedInsights(payload: Payload) {
 
     const categoryRecord = requireSeedRecord(category.docs[0], `category ${article.categorySlug}`)
     const authorRecord = requireSeedRecord(author.docs[0], `author ${article.authorName}`)
+    // Task 14 refreshes generated types after removing the legacy required `status` field.
     const created = await payload.create({
       collection: 'insights',
       locale: 'en',
-      draft: true,
+      draft: false,
       data: {
         slug: article.slug,
         ...localizedArticleData(article, 'en'),
@@ -265,12 +266,12 @@ export async function seedInsights(payload: Payload) {
         publishedAt: article.publishedAt,
         _status: 'published',
       },
-    })
+    } as never)
     await payload.update({
       collection: 'insights',
       id: created.id,
       locale: 'id',
-      draft: true,
+      draft: false,
       data: { ...localizedArticleData(article, 'id'), _status: 'published' },
     })
   }
