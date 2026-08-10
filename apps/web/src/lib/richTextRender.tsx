@@ -1,14 +1,18 @@
 import * as React from 'react'
+import type {
+  SerializedEditorState,
+  SerializedLexicalNode,
+} from '@payloadcms/richtext-lexical/lexical'
+import {
+  RichText,
+  type JSXConverterArgs,
+  type JSXConverters,
+  type JSXConvertersFunction,
+} from '@payloadcms/richtext-lexical/react'
 
 import { DisplayHeading, Eyebrow } from '@jakartabc/ui'
 
-type LexicalNode = {
-  type?: string
-  tag?: 'h2' | 'h3'
-  text?: string
-  children?: LexicalNode[]
-  fields?: Record<string, unknown>
-}
+import { safeHref } from './url/safe-url'
 
 type Regulation = {
   id: string | number
@@ -16,114 +20,443 @@ type Regulation = {
   url: string
 }
 
-export function RichTextRender({
-  content,
-  regulations,
-}: {
-  content: { root: { children: LexicalNode[] } }
-  regulations: Regulation[]
-}) {
-  const lookupRegulation = (id: string | number | undefined) => {
-    if (id === undefined) return undefined
-    return regulations.find((regulation) => regulation.id === id)
+type UnknownRecord = Record<string, unknown>
+type ConverterArgs = JSXConverterArgs<SerializedLexicalNode & UnknownRecord>
+type RichTextLocale = 'en' | 'id'
+
+const CONTENT_SLUG_MAX_LENGTH = 128
+const CONTENT_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const SUPPORTED_NODE_TYPES = Object.freeze(
+  Object.assign(Object.create(null) as Record<string, true>, {
+    autolink: true,
+    block: true,
+    heading: true,
+    horizontalrule: true,
+    linebreak: true,
+    link: true,
+    list: true,
+    listitem: true,
+    paragraph: true,
+    quote: true,
+    relationship: true,
+    tab: true,
+    table: true,
+    tablecell: true,
+    tablerow: true,
+    text: true,
+    upload: true,
+  }),
+)
+const SUPPORTED_BLOCK_TYPES = Object.freeze(
+  Object.assign(Object.create(null) as Record<string, true>, {
+    dropCap: true,
+    pullQuote: true,
+    regulationCite: true,
+  }),
+)
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+function unsupportedRichTextNode(description: string): null {
+  if (process.env.NODE_ENV !== 'production') {
+    throw new Error(`Unsupported rich-text node: ${description}`)
   }
 
-  function renderNode(node: LexicalNode, index: number): React.ReactNode {
-    if (node.type === 'paragraph') {
-      return (
-        <p key={index} className="mt-6 max-w-prose text-body-md leading-relaxed text-ink-700">
-          {(node.children ?? []).map(renderInline)}
-        </p>
-      )
+  return null
+}
+
+function UnknownRichTextNode({ description }: { description: string }) {
+  return unsupportedRichTextNode(description)
+}
+
+function nodeDescription(node: UnknownRecord): string {
+  const type = Object.hasOwn(node, 'type') ? stringValue(node.type) : null
+  const fields = Object.hasOwn(node, 'fields') && isRecord(node.fields) ? node.fields : null
+
+  if (type === 'block' && fields) {
+    const blockType = Object.hasOwn(fields, 'blockType') ? stringValue(fields.blockType) : null
+    return `block:${blockType ?? 'unknown'}`
+  }
+
+  if (type === 'inlineBlock' && fields) {
+    const blockType = Object.hasOwn(fields, 'blockType') ? stringValue(fields.blockType) : null
+    return `inlineBlock:${blockType ?? 'unknown'}`
+  }
+
+  return type ?? 'unknown'
+}
+
+function normalizeNodes(nodes: unknown): SerializedLexicalNode[] {
+  if (!Array.isArray(nodes)) return []
+
+  return nodes.flatMap((value) => {
+    if (!isRecord(value)) {
+      unsupportedRichTextNode('unknown')
+      return []
     }
 
-    if (node.type === 'heading') {
-      const tag = node.tag === 'h3' ? 'h3' : 'h2'
-
-      return (
-        <DisplayHeading key={index} as={tag} size="md" className="mt-16">
-          {(node.children ?? []).map(renderInline)}
-        </DisplayHeading>
-      )
+    const type = Object.hasOwn(value, 'type') ? stringValue(value.type) : null
+    if (!type || !Object.hasOwn(SUPPORTED_NODE_TYPES, type)) {
+      unsupportedRichTextNode(nodeDescription(value))
+      return []
     }
 
-    if (node.type === 'block') {
-      const fields = node.fields ?? {}
+    if (type === 'block') {
+      const fields = Object.hasOwn(value, 'fields') && isRecord(value.fields) ? value.fields : null
+      const blockType =
+        fields && Object.hasOwn(fields, 'blockType') ? stringValue(fields.blockType) : null
 
-      if (fields.blockType === 'pullQuote') {
-        return (
-          <figure key={index} className="my-12 max-w-prose">
-            <blockquote className="font-display text-display-md leading-[1.2] text-ink-900">
-              {String(fields.quote ?? '')}
-            </blockquote>
-            {fields.attribution ? (
-              <figcaption className="mt-4 text-body-sm text-ink-700">
-                — {String(fields.attribution)}
-              </figcaption>
-            ) : null}
-          </figure>
-        )
-      }
-
-      if (fields.blockType === 'dropCap') {
-        return <span key={index} data-dropcap aria-hidden />
-      }
-
-      if (fields.blockType === 'regulationCite') {
-        const relation = fields.regulation
-        const regulationId =
-          typeof relation === 'object' && relation !== null && 'id' in relation
-            ? (relation.id as string | number | undefined)
-            : (relation as string | number | undefined)
-        const regulation = lookupRegulation(regulationId)
-
-        if (!regulation) return null
-
-        if (fields.inline) {
-          return (
-            <a
-              key={index}
-              href={regulation.url}
-              className="text-ochre-700 underline-offset-4 hover:underline"
-            >
-              {regulation.code}
-            </a>
-          )
-        }
-
-        return (
-          <aside key={index} className="my-8 border-l-2 border-ochre-600 pl-6">
-            <Eyebrow>Regulation</Eyebrow>
-            <p className="mt-2">
-              <a href={regulation.url} className="text-ochre-700 underline underline-offset-4">
-                {regulation.code}
-              </a>
-            </p>
-          </aside>
-        )
+      if (!blockType || !Object.hasOwn(SUPPORTED_BLOCK_TYPES, blockType)) {
+        unsupportedRichTextNode(nodeDescription(value))
+        return []
       }
     }
 
+    if (Object.hasOwn(value, 'children')) {
+      if (!Array.isArray(value.children)) {
+        unsupportedRichTextNode(nodeDescription(value))
+        return []
+      }
+
+      return [
+        { ...value, children: normalizeNodes(value.children) } as unknown as SerializedLexicalNode,
+      ]
+    }
+
+    return [value as SerializedLexicalNode]
+  })
+}
+
+function normalizeEditorState(
+  content: SerializedEditorState<SerializedLexicalNode>,
+): SerializedEditorState<SerializedLexicalNode> {
+  const root = isRecord(content.root) ? content.root : null
+  if (!root) {
+    unsupportedRichTextNode('root')
+    return {
+      root: {
+        children: [],
+        direction: null,
+        format: '',
+        indent: 0,
+        type: 'root',
+        version: 1,
+      },
+    } as SerializedEditorState<SerializedLexicalNode>
+  }
+
+  return {
+    ...content,
+    root: {
+      ...root,
+      children: normalizeNodes(root.children),
+    },
+  } as SerializedEditorState<SerializedLexicalNode>
+}
+
+function internalDocumentHref(fields: UnknownRecord, locale: RichTextLocale): string | null {
+  const doc = isRecord(fields.doc) ? fields.doc : null
+  if (!doc || !isRecord(doc.value)) return null
+
+  const basePath =
+    doc.relationTo === 'insights' ? '/insights' : doc.relationTo === 'services' ? '/services' : null
+  const slug = stringValue(doc.value.slug)
+
+  if (!basePath || !slug || slug.length > CONTENT_SLUG_MAX_LENGTH || !CONTENT_SLUG.test(slug)) {
     return null
   }
 
-  function renderInline(node: LexicalNode, index: number): React.ReactNode {
-    if (node.type === 'text') return <React.Fragment key={index}>{node.text}</React.Fragment>
+  const localePrefix = locale === 'id' ? '/id' : ''
+  return safeHref(`${localePrefix}${basePath}/${slug}`)
+}
 
-    if (node.type === 'link') {
-      return (
-        <a
-          key={index}
-          href={String(node.fields?.url ?? '#')}
-          className="text-ochre-700 underline-offset-4 hover:underline"
-        >
-          {(node.children ?? []).map(renderInline)}
-        </a>
-      )
-    }
+function createLinkConverter(locale: RichTextLocale) {
+  return function RichTextLinkConverter({ node, nodesToJSX }: ConverterArgs): React.ReactNode {
+    const fields = isRecord(node.fields) ? node.fields : {}
+    const children = nodesToJSX({ nodes: Array.isArray(node.children) ? node.children : [] })
+    const href =
+      fields.linkType === 'internal'
+        ? internalDocumentHref(fields, locale)
+        : fields.linkType === 'custom' || node.type === 'autolink'
+          ? safeHref(fields.url)
+          : null
 
-    return (node.children ?? []).map(renderInline)
+    if (!href) return <>{children}</>
+
+    const newTab = fields.newTab === true
+    return (
+      <a
+        href={href}
+        className="text-ochre-700 underline-offset-4 hover:underline"
+        rel={newTab ? 'noopener noreferrer' : undefined}
+        target={newTab ? '_blank' : undefined}
+      >
+        {children}
+      </a>
+    )
+  }
+}
+
+function uploadConverter({ node }: ConverterArgs): React.ReactNode {
+  const value = isRecord(node.value) ? node.value : null
+  const fields = isRecord(node.fields) ? node.fields : {}
+  if (!value) return null
+
+  const alt = stringValue(fields.alt) ?? stringValue(value.alt) ?? ''
+  const filename = stringValue(value.filename) ?? alt
+  const href = safeHref(value.url)
+  const mimeType = stringValue(value.mimeType)
+
+  if (!href) {
+    return filename ? <span data-richtext-upload>{filename}</span> : null
   }
 
-  return <>{content.root.children.map(renderNode)}</>
+  if (!mimeType?.startsWith('image/')) {
+    return (
+      <a href={href} className="text-ochre-700 underline-offset-4 hover:underline" rel="noopener">
+        {filename ?? href}
+      </a>
+    )
+  }
+
+  const sources = isRecord(value.sizes)
+    ? Object.entries(value.sizes).flatMap(([size, candidate]) => {
+        if (!isRecord(candidate)) return []
+
+        const sourceURL = safeHref(candidate.url)
+        const width = positiveNumber(candidate.width)
+        const sourceType = stringValue(candidate.mimeType)
+        if (!sourceURL || !width || !sourceType?.startsWith('image/')) return []
+
+        return [
+          <source
+            key={size}
+            media={`(max-width: ${width}px)`}
+            srcSet={sourceURL}
+            type={sourceType}
+          />,
+        ]
+      })
+    : []
+
+  const image = (
+    // eslint-disable-next-line @next/next/no-img-element -- Payload media can omit dimensions and uses runtime URLs.
+    <img
+      alt={alt}
+      height={positiveNumber(value.height)}
+      src={href}
+      width={positiveNumber(value.width)}
+    />
+  )
+
+  return sources.length > 0 ? (
+    <picture>
+      {sources}
+      {image}
+    </picture>
+  ) : (
+    image
+  )
+}
+
+function relationshipConverter({ node }: ConverterArgs): React.ReactNode {
+  const value = node.value
+  const relationTo = stringValue(node.relationTo) ?? 'unknown'
+
+  if (!isRecord(value)) {
+    const label = typeof value === 'string' || typeof value === 'number' ? String(value) : null
+    return label ? <span data-richtext-relationship={relationTo}>{label}</span> : null
+  }
+
+  const label =
+    stringValue(value.title) ??
+    stringValue(value.name) ??
+    stringValue(value.code) ??
+    stringValue(value.slug) ??
+    (typeof value.id === 'string' || typeof value.id === 'number' ? String(value.id) : null)
+  if (!label) return null
+
+  const href = safeHref(value.url)
+  if (!href) return <span data-richtext-relationship={relationTo}>{label}</span>
+
+  return (
+    <a
+      href={href}
+      className="text-ochre-700 underline-offset-4 hover:underline"
+      data-richtext-relationship={relationTo}
+    >
+      {label}
+    </a>
+  )
+}
+
+function createConverters(
+  regulations: Regulation[],
+  locale: RichTextLocale,
+): JSXConvertersFunction {
+  const lookupRegulation = (id: unknown) =>
+    typeof id === 'string' || typeof id === 'number'
+      ? regulations.find((regulation) => regulation.id === id)
+      : undefined
+
+  return ({ defaultConverters }) =>
+    ({
+      ...defaultConverters,
+      paragraph: ({ node, nodesToJSX }: ConverterArgs) => {
+        const children = nodesToJSX({ nodes: Array.isArray(node.children) ? node.children : [] })
+        return (
+          <p className="mt-6 max-w-prose text-body-md leading-relaxed text-ink-700">
+            {children.length > 0 ? children : <br />}
+          </p>
+        )
+      },
+      heading: ({ node, nodesToJSX }: ConverterArgs) => {
+        const children = nodesToJSX({
+          nodes: Array.isArray(node.children) ? node.children : [],
+        })
+
+        if (node.tag === 'h2' || node.tag === 'h3') {
+          return (
+            <DisplayHeading as={node.tag} size="md" className="mt-16">
+              {children}
+            </DisplayHeading>
+          )
+        }
+
+        if (node.tag === 'h1') {
+          return (
+            <h1 className="mt-16 text-balance font-display text-display-lg font-normal leading-[1.1] text-ink-900">
+              {children}
+            </h1>
+          )
+        }
+
+        if (node.tag === 'h4') {
+          return (
+            <h4 className="mt-12 text-balance font-display text-heading-lg font-medium text-ink-900">
+              {children}
+            </h4>
+          )
+        }
+
+        if (node.tag === 'h5') {
+          return (
+            <h5 className="mt-12 text-balance font-display text-heading-md font-medium text-ink-900">
+              {children}
+            </h5>
+          )
+        }
+
+        if (node.tag === 'h6') {
+          return (
+            <h6 className="mt-12 text-balance font-display text-body-lg font-medium text-ink-900">
+              {children}
+            </h6>
+          )
+        }
+
+        return <UnknownRichTextNode description={`heading:${String(node.tag ?? 'unknown')}`} />
+      },
+      list: ({ node, nodesToJSX, parent }: ConverterArgs) => {
+        const children = nodesToJSX({ nodes: Array.isArray(node.children) ? node.children : [] })
+        const isNested = parent.type === 'listitem'
+        const spacing = isNested ? 'mt-4 space-y-2' : 'mt-6 space-y-4'
+
+        if (node.tag === 'ol') {
+          return <ol className={`${spacing} list-decimal pl-6`}>{children}</ol>
+        }
+
+        if (node.tag === 'ul') {
+          const listStyle = node.listType === 'check' ? 'list-none' : 'list-disc'
+          return <ul className={`${spacing} ${listStyle} pl-6`}>{children}</ul>
+        }
+
+        return <UnknownRichTextNode description={`list:${String(node.tag ?? 'unknown')}`} />
+      },
+      autolink: createLinkConverter(locale),
+      link: createLinkConverter(locale),
+      relationship: relationshipConverter,
+      upload: uploadConverter,
+      blocks: {
+        dropCap: ({ node }: ConverterArgs) =>
+          isRecord(node.fields) && node.fields.enabled === false ? null : (
+            <span data-dropcap aria-hidden />
+          ),
+        pullQuote: ({ node }: ConverterArgs) => {
+          const fields = isRecord(node.fields) ? node.fields : {}
+          const quote = stringValue(fields.quote) ?? ''
+          const attribution = stringValue(fields.attribution)
+
+          return (
+            <figure className="my-12 max-w-prose">
+              <blockquote className="font-display text-display-md leading-[1.2] text-ink-900">
+                {quote}
+              </blockquote>
+              {attribution ? (
+                <figcaption className="mt-4 text-body-sm text-ink-700">— {attribution}</figcaption>
+              ) : null}
+            </figure>
+          )
+        },
+        regulationCite: ({ node }: ConverterArgs) => {
+          const fields = isRecord(node.fields) ? node.fields : {}
+          const relation = fields.regulation
+          const regulationId = isRecord(relation) ? relation.id : relation
+          const regulation = lookupRegulation(regulationId)
+          if (!regulation) return null
+
+          const href = safeHref(regulation.url)
+          const citation = href ? (
+            <a href={href} className="text-ochre-700 underline-offset-4 hover:underline">
+              {regulation.code}
+            </a>
+          ) : (
+            <span className="text-ochre-700">{regulation.code}</span>
+          )
+
+          if (fields.inline === true) return citation
+
+          return (
+            <aside className="my-8 border-l-2 border-ochre-600 pl-6">
+              <Eyebrow>{locale === 'id' ? 'Regulasi' : 'Regulation'}</Eyebrow>
+              <p className="mt-2">{citation}</p>
+            </aside>
+          )
+        },
+      },
+      unknown: ({ node }: ConverterArgs) => (
+        <UnknownRichTextNode description={nodeDescription(node)} />
+      ),
+    }) as JSXConverters
+}
+
+export function RichTextRender({
+  content,
+  locale = 'en',
+  regulations,
+}: {
+  content: SerializedEditorState<SerializedLexicalNode>
+  locale?: RichTextLocale
+  regulations: Regulation[]
+}) {
+  const safeLocale: RichTextLocale = locale === 'id' ? 'id' : 'en'
+  const normalizedContent = normalizeEditorState(content)
+
+  return (
+    <RichText
+      converters={createConverters(regulations, safeLocale)}
+      data={normalizedContent}
+      disableContainer
+    />
+  )
 }
