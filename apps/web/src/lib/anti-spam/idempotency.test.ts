@@ -43,6 +43,11 @@ class FakeIdempotencyRedis {
     const token = options.arguments[0] ?? ''
     if (this.values.get(lockKey) !== token) return 0
 
+    if (script.includes("'EXPIRE'")) {
+      this.ttls.set(lockKey, Number(options.arguments[1]))
+      return 1
+    }
+
     if (options.keys.length === 2) {
       const completedKey = options.keys[1] ?? ''
       const completedTtl = Number(options.arguments[1])
@@ -142,6 +147,109 @@ describe('submission idempotency coordinator', () => {
     expect([...redis.values.keys()]).toEqual([
       expect.stringMatching(/^jakartabc:test:submission:\{[a-f0-9]{64}\}:completed$/),
     ])
+  })
+
+  it('atomically renews the current lease on one cluster-stable lock key', async () => {
+    const redis = new FakeIdempotencyRedis()
+    const coordinator = createSubmissionCoordinator(
+      redis,
+      'jakartabc:test',
+      'test-payload-secret-that-is-at-least-32-chars',
+    )
+    const acquired = await coordinator.acquire('submission')
+    if (acquired.state !== 'acquired') throw new Error('expected acquired lease')
+    const lockKey = redis.setCalls[0]?.key ?? ''
+    redis.ttls.set(lockKey, 1)
+
+    await expect(coordinator.renew(acquired.lease)).resolves.toEqual({ state: 'renewed' })
+
+    expect(redis.values.get(lockKey)).toBe(acquired.lease.token)
+    expect(redis.ttls.get(lockKey)).toBe(30)
+    const renewCall = redis.evalCalls.at(-1)
+    expect(renewCall?.keys).toEqual([lockKey])
+    expect(renewCall?.arguments).toEqual([acquired.lease.token, '30'])
+    expect(renewCall?.script).toMatch(/GET/)
+    expect(renewCall?.script).toMatch(/EXPIRE/)
+    expect(lockKey).toMatch(/^jakartabc:test:submission:\{[a-f0-9]{64}\}:lock$/)
+  })
+
+  it('never extends a newer owner when a stale lease renews', async () => {
+    const redis = new FakeIdempotencyRedis()
+    const coordinator = createSubmissionCoordinator(
+      redis,
+      'jakartabc:test',
+      'test-payload-secret-that-is-at-least-32-chars',
+    )
+    const requestA = await coordinator.acquire('submission')
+    if (requestA.state !== 'acquired') throw new Error('expected request A lease')
+    const lockKey = redis.setCalls[0]?.key ?? ''
+    redis.expireLock(lockKey)
+    const requestB = await coordinator.acquire('submission')
+    if (requestB.state !== 'acquired') throw new Error('expected request B lease')
+    redis.ttls.set(lockKey, 7)
+
+    await expect(coordinator.renew(requestA.lease)).resolves.toEqual({ state: 'lease-lost' })
+
+    expect(redis.values.get(lockKey)).toBe(requestB.lease.token)
+    expect(redis.ttls.get(lockKey)).toBe(7)
+  })
+
+  it('reports a missing expired lock as lease lost', async () => {
+    const redis = new FakeIdempotencyRedis()
+    const coordinator = createSubmissionCoordinator(
+      redis,
+      'jakartabc:test',
+      'test-payload-secret-that-is-at-least-32-chars',
+    )
+    const acquired = await coordinator.acquire('submission')
+    if (acquired.state !== 'acquired') throw new Error('expected acquired lease')
+    const lockKey = redis.setCalls[0]?.key ?? ''
+    redis.expireLock(lockKey)
+
+    await expect(coordinator.renew(acquired.lease)).resolves.toEqual({ state: 'lease-lost' })
+
+    expect(redis.values.has(lockKey)).toBe(false)
+    expect(redis.ttls.has(lockKey)).toBe(false)
+  })
+
+  it.each([null, false, '', '1', 2, undefined])(
+    'fails closed when renew returns malformed Redis result %j',
+    async (malformed) => {
+      const redis = new FakeIdempotencyRedis()
+      const coordinator = createSubmissionCoordinator(
+        redis,
+        'jakartabc:test',
+        'test-payload-secret-that-is-at-least-32-chars',
+      )
+      const acquired = await coordinator.acquire('submission')
+      if (acquired.state !== 'acquired') throw new Error('expected acquired lease')
+      vi.spyOn(redis, 'eval').mockResolvedValueOnce(malformed as never)
+
+      await expect(coordinator.renew(acquired.lease)).rejects.toBeInstanceOf(
+        RedisUnavailableError,
+      )
+    },
+  )
+
+  it('fails closed with a sanitized error when Redis renewal fails', async () => {
+    const redis = new FakeIdempotencyRedis()
+    const coordinator = createSubmissionCoordinator(
+      redis,
+      'jakartabc:test',
+      'test-payload-secret-that-is-at-least-32-chars',
+    )
+    const acquired = await coordinator.acquire('submission')
+    if (acquired.state !== 'acquired') throw new Error('expected acquired lease')
+    vi.spyOn(redis, 'eval').mockRejectedValueOnce(
+      new Error('redis://user:secret@redis/private submission=private'),
+    )
+
+    const renewal = coordinator.renew(acquired.lease)
+    await expect(renewal).rejects.toMatchObject({
+      name: 'RedisUnavailableError',
+      message: 'Redis is unavailable',
+    })
+    await expect(renewal).rejects.not.toThrow(/user:secret|submission=private/)
   })
 
   it.each([null, false, '', '1', 2, undefined])(

@@ -19,6 +19,13 @@ end
 return 0
 `
 
+const RENEW_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+  return 0
+end
+return redis.call('EXPIRE', KEYS[1], ARGV[2])
+`
+
 const COMPLETE_LOCK_SCRIPT = `
 if redis.call('GET', KEYS[1]) ~= ARGV[1] then
   return 0
@@ -39,11 +46,17 @@ export type AcquireResult =
   | { state: 'completed' }
 
 export type CompleteResult = { state: 'completed' } | { state: 'lease-lost' }
+export type RenewResult = { state: 'renewed' } | { state: 'lease-lost' }
 export type ReleaseResult = { state: 'released' } | { state: 'lease-lost' }
 
 export interface SubmissionCoordinator {
   rateLimit(scope: RateLimitScope, identity: string): Promise<RateLimitResult>
   acquire(submissionId: string): Promise<AcquireResult>
+  /**
+   * Proves and extends pre-send ownership. This is not a transactional email fence:
+   * callers must never automatically resend a durably recorded delivery attempt >= 1.
+   */
+  renew(lease: SubmissionLease): Promise<RenewResult>
   complete(lease: SubmissionLease): Promise<CompleteResult>
   release(lease: SubmissionLease): Promise<ReleaseResult>
 }
@@ -130,6 +143,22 @@ export function createSubmissionCoordinator(
       }
     },
 
+    async renew(lease) {
+      const { lock } = keysFor(lease.submissionId)
+
+      try {
+        const result = await redis.eval(RENEW_LOCK_SCRIPT, {
+          keys: [lock],
+          arguments: [lease.token, String(LOCK_TTL_SECONDS)],
+        })
+        return parseMutationResult(result) === 1
+          ? ({ state: 'renewed' } as const)
+          : ({ state: 'lease-lost' } as const)
+      } catch (error) {
+        toUnavailable(error)
+      }
+    },
+
     async complete(lease) {
       const { completed, lock } = keysFor(lease.submissionId)
 
@@ -176,6 +205,9 @@ export const submissionCoordinator: SubmissionCoordinator = {
   },
   async acquire(submissionId) {
     return (await getEnvironmentCoordinator()).acquire(submissionId)
+  },
+  async renew(lease) {
+    return (await getEnvironmentCoordinator()).renew(lease)
   },
   async complete(lease) {
     return (await getEnvironmentCoordinator()).complete(lease)
