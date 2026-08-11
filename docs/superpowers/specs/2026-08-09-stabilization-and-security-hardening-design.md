@@ -192,9 +192,13 @@ visitor
   -> schema + honeypot + Turnstile validation
   -> trusted client identity extraction
   -> Redis atomic rate limit
-  -> submission-id idempotency check
-  -> PostgreSQL transaction inserts one accepted lead
-  -> delivery attempt updates delivery fields
+  -> acquire tokenized Redis submission lease
+  -> create or reconcile one durable PostgreSQL lead
+  -> prepare the owner message without external side effects
+  -> renew the lease
+  -> atomic PostgreSQL CAS claims one pristine pending/attempt-zero row
+  -> renew the lease immediately before the provider call
+  -> delivery attempt persists sent or failed state
   -> accepted response, independent of sales-email success
 ```
 
@@ -202,6 +206,21 @@ Each browser submission carries a cryptographically random `submissionId`.
 PostgreSQL has a unique constraint on this identifier and is the final source
 of truth. Redis provides a short-lived lock to reduce duplicate work, but a
 Redis race or restart cannot create a second durable lead.
+
+The Redis lease uses an opaque per-acquisition token. Renewal, completion, and
+release compare that token atomically so an expired worker cannot mutate a
+newer's lock. Redis alone is not the email fence: a fixed, parameterized
+PostgreSQL `UPDATE ... WHERE ... RETURNING` statement atomically transitions a
+row only when status is pending, attempt count is zero, and attempt timestamp,
+delivery timestamp, and delivery error are all null. The owner message is
+prepared before this claim, and only the CAS winner may reach the provider.
+The winner renews its lease again immediately before that external side effect.
+
+A durable pending row with one or more attempts has an ambiguous provider
+outcome after a crash and is never automatically resent or relabeled failed.
+Only coherent failed rows are eligible for the authenticated retry operation;
+ambiguous pending rows require operator audit and separate provider-idempotency
+proof or an explicit manual decision.
 
 The application persists the lead before attempting email. A sales-email
 failure does not return a generic submission failure that encourages the
@@ -219,6 +238,11 @@ A retry operation selects failed deliveries, claims them safely, sends again,
 and transitions them to `sent` or back to `failed`. It is safe to run more than
 once. This program may expose the operation as an authenticated command or
 admin operation, but not as a public endpoint.
+
+The CAS runtime is released only with the additive compatibility migration
+that creates and backfills its delivery columns. Application startup remains
+behind the migration job; a missing-column error fails closed and never falls
+back to a Payload find-then-update sequence.
 
 Visitor confirmation email and internal sales notification are separately
 observable if the existing mail package sends both. Lead acceptance never

@@ -8,6 +8,25 @@
 
 **Tech Stack:** pnpm workspaces, Turborepo, Next.js 16.2.11, React 19.2.8, Payload 3.86.0, PostgreSQL, `@payloadcms/storage-s3` 3.86.0, Redis client 6.2.0, Vitest, Playwright, Lighthouse, Docker Compose.
 
+## Execution status
+
+This table is the authoritative handoff status. The detailed checkboxes below are retained as the
+implementation and verification recipe; they are not a reliable progress ledger for another
+agentic runner.
+
+| Scope                                | Status                                                                 |
+| ------------------------------------ | ---------------------------------------------------------------------- |
+| Tasks 0–4                            | Completed, reviewed, and integrated                                    |
+| Wave 1 / Tasks 5–7                   | Completed, reviewed, and integrated                                    |
+| Wave 2 / Tasks 8–10                  | Completed, reviewed, and integrated                                    |
+| Wave 3 shared delivery prerequisites | Completed, reviewed, and integrated                                    |
+| Wave 3 / Tasks 11–13                 | Completed, reviewed, integrated, and combined gate passed              |
+| Task 14                              | Not started; mandatory migration/generated-artifact deployment barrier |
+| Tasks 15–18                          | Not started                                                            |
+
+Do not deploy or start a runtime containing the lead-delivery CAS call sites until Task 14 has
+migrated both lead tables and its restored-database rehearsal has passed.
+
 ---
 
 ## Execution contract
@@ -50,8 +69,9 @@ flowchart TD
   T9 --> W2
   T10 --> W2
 
-  W2 --> T11[11. Durable contact flow]
-  W2 --> T12[12. Durable booking flow]
+  W2 --> S3[Wave 3 shared delivery prerequisites]
+  S3 --> T11[11. Durable contact flow]
+  S3 --> T12[12. Durable booking flow]
   W2 --> T13[13. Insight queries and error semantics]
 
   T11 --> W3[Wave 3 merge gate]
@@ -98,17 +118,35 @@ export type DeliveryReconciliation =
 export function reconcilePersistedDelivery(record: unknown): DeliveryReconciliation
 
 export type SubmissionResult =
+  | { ok: true }
   | { ok: true; submissionId: string; delivery: DeliveryStatus }
   | {
       ok: false
-      code: 'validation' | 'captcha' | 'rate' | 'service-unknown' | 'temporarily-unavailable'
+      code:
+        | 'validation'
+        | 'captcha'
+        | 'rate'
+        | 'service-unknown'
+        | 'persistence'
+        | 'temporarily-unavailable'
+        | 'unknown'
     }
+
+export type SubmissionLease = Readonly<{ submissionId: string; token: string }>
+export type AcquireResult =
+  | { state: 'acquired'; lease: SubmissionLease }
+  | { state: 'in-progress' }
+  | { state: 'completed' }
+export type RenewResult = { state: 'renewed' } | { state: 'lease-lost' }
+export type CompleteResult = { state: 'completed' } | { state: 'lease-lost' }
+export type ReleaseResult = { state: 'released' } | { state: 'lease-lost' }
 
 export interface SubmissionCoordinator {
   rateLimit(scope: 'contact' | 'booking', identity: string): Promise<RateLimitResult>
-  acquire(submissionId: string): Promise<'acquired' | 'in-progress' | 'completed'>
-  complete(submissionId: string): Promise<void>
-  release(submissionId: string): Promise<void>
+  acquire(submissionId: string): Promise<AcquireResult>
+  renew(lease: SubmissionLease): Promise<RenewResult>
+  complete(lease: SubmissionLease): Promise<CompleteResult>
+  release(lease: SubmissionLease): Promise<ReleaseResult>
 }
 ```
 
@@ -1237,11 +1275,11 @@ git commit -m "fix: preserve Insight cache and error semantics"
 
 ## Wave 3 merge and review gate
 
-- [ ] Complete two-stage reviews for Tasks 11, 12, and 13.
-- [ ] Cherry-pick contact, booking, then Insight commits.
-- [ ] Resolve no schema artifact by regeneration yet; keep generated files owned by Task 14.
-- [ ] Run: `pnpm --filter @jakartabc/content test && pnpm --filter @jakartabc/web test && pnpm typecheck`.
-- [ ] Expected: all unit suites pass on the integrated source tree.
+- [x] Complete two-stage reviews for Tasks 11, 12, and 13.
+- [x] Merge contact, booking, then Insight commits.
+- [x] Resolve no schema artifact by regeneration yet; keep generated files owned by Task 14.
+- [x] Run bounded equivalents of `pnpm --filter @jakartabc/content test && pnpm --filter @jakartabc/web test && pnpm typecheck`.
+- [x] Result: content 156/156, web 407/407, and workspace typecheck passed on the integrated source tree.
 
 ## Task 14: Add delivery retry, generate one compatibility migration, and refresh artifacts
 
