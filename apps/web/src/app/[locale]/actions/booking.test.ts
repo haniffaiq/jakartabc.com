@@ -268,6 +268,12 @@ describe('submitBooking', () => {
     expect(completeMock).toHaveBeenCalledWith(LEASE)
     expect(renewMock).toHaveBeenNthCalledWith(1, LEASE)
     expect(renewMock).toHaveBeenNthCalledWith(2, LEASE)
+    expect(renderMock.mock.invocationCallOrder[0]).toBeLessThan(
+      renewMock.mock.invocationCallOrder[0] ?? Infinity,
+    )
+    expect(bookingSubjectMock.mock.invocationCallOrder[0]).toBeLessThan(
+      renewMock.mock.invocationCallOrder[0] ?? Infinity,
+    )
     expect(renewMock.mock.invocationCallOrder[0]).toBeLessThan(
       updateMock.mock.invocationCallOrder[0] ?? Infinity,
     )
@@ -378,7 +384,8 @@ describe('submitBooking', () => {
 
     expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
     expect(updateMock).not.toHaveBeenCalled()
-    expect(renderMock).not.toHaveBeenCalled()
+    expect(renderMock).toHaveBeenCalledTimes(1)
+    expect(bookingSubjectMock).toHaveBeenCalledTimes(1)
     expect(sendMock).not.toHaveBeenCalled()
     expect(releaseMock).toHaveBeenCalledWith(LEASE)
   })
@@ -432,6 +439,41 @@ describe('submitBooking', () => {
     expect(completeMock).toHaveBeenCalledWith(LEASE_B)
     expect(completeMock).not.toHaveBeenCalledWith(LEASE)
   })
+
+  it.each([
+    ['render', () => renderMock.mockRejectedValueOnce(new Error('render preparation failed'))],
+    [
+      'subject',
+      () =>
+        bookingSubjectMock.mockImplementationOnce(() => {
+          throw new Error('subject preparation failed')
+        }),
+    ],
+  ])(
+    'keeps attempts at zero when %s preparation fails and retries owner send once',
+    async (_case, failPreparation) => {
+      findMock.mockResolvedValue({ docs: [bookingRow('pending', 0)] })
+      failPreparation()
+
+      expect(await submitBooking(fd())).toEqual({
+        ok: false,
+        code: 'temporarily-unavailable',
+      })
+      expect(renewMock).not.toHaveBeenCalled()
+      expect(updateMock).not.toHaveBeenCalled()
+      expect(sendMock).not.toHaveBeenCalled()
+      expect(releaseMock).toHaveBeenCalledWith(LEASE)
+
+      expect(await submitBooking(fd())).toEqual({
+        ok: true,
+        submissionId: SUBMISSION_ID,
+        delivery: 'sent',
+      })
+      expect(updateMock).toHaveBeenCalledTimes(2)
+      expect(sendMock.mock.calls.filter(([mail]) => mail.to === 'sales@example.co')).toHaveLength(1)
+      expect(completeMock).toHaveBeenCalledTimes(1)
+    },
+  )
 
   it('returns accepted pending without persistence or mail for a concurrent in-progress request', async () => {
     acquireMock.mockResolvedValueOnce({ state: 'in-progress' })

@@ -482,6 +482,21 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
     return operationalFailure(data.submissionId, 'persisted-booking-hydration-failed')
   }
 
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'
+  let preparedOwnerMail: Awaited<ReturnType<typeof prepareOwnerMail>>
+  try {
+    preparedOwnerMail = await prepareOwnerMail({
+      data: persistedMail.data,
+      leadId: lead.id,
+      salesEmail,
+      serviceName: persistedMail.serviceName,
+      siteUrl,
+    })
+  } catch {
+    await releaseLease(lease)
+    return operationalFailure(data.submissionId, 'owner-mail-prepare-failed')
+  }
+
   if (!(await renewLease(lease))) {
     await releaseLease(lease)
     return operationalFailure(data.submissionId, 'delivery-claim-renew-failed')
@@ -504,21 +519,6 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   if (!hasExactPersistedTransition(persistedPending, pending)) {
     await releaseLease(lease)
     return operationalFailure(data.submissionId, 'delivery-pending-persist-mismatch')
-  }
-
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'
-  let preparedOwnerMail: Awaited<ReturnType<typeof prepareOwnerMail>>
-  try {
-    preparedOwnerMail = await prepareOwnerMail({
-      data: persistedMail.data,
-      leadId: lead.id,
-      salesEmail,
-      serviceName: persistedMail.serviceName,
-      siteUrl,
-    })
-  } catch {
-    await releaseLease(lease)
-    return operationalFailure(data.submissionId, 'owner-mail-prepare-failed')
   }
 
   if (!(await renewLease(lease))) {
