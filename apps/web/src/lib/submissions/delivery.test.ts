@@ -44,6 +44,62 @@ describe('delivery transitions', () => {
     expect(pending).not.toBe(sent)
   })
 
+  it('clamps a backward completion clock to the last attempt timestamp', () => {
+    const pending = beginDeliveryAttempt(0, DELIVERED_AT)
+    const sent = completeDeliveryAttempt(pending, ATTEMPTED_AT)
+
+    expect(sent.deliveredAt).toBe(DELIVERED_AT.toISOString())
+    expect(reconcilePersistedDelivery(sent)).toEqual({ state: 'reconciled', delivery: 'sent' })
+  })
+
+  it('keeps a same-time completion timestamp valid', () => {
+    const pending = beginDeliveryAttempt(0, ATTEMPTED_AT)
+    const sent = completeDeliveryAttempt(pending, ATTEMPTED_AT)
+
+    expect(sent.deliveredAt).toBe(ATTEMPTED_AT.toISOString())
+    expect(reconcilePersistedDelivery(sent)).toEqual({ state: 'reconciled', delivery: 'sent' })
+  })
+
+  it('makes every public transition builder output reconcilable state', () => {
+    const pending = beginDeliveryAttempt(0, ATTEMPTED_AT)
+    const sent = completeDeliveryAttempt(pending, DELIVERED_AT)
+    const failed = failDeliveryAttempt(pending, new Error('provider raw secret'))
+
+    expect(reconcilePersistedDelivery(pending)).toEqual({
+      state: 'reconciled',
+      delivery: 'pending',
+    })
+    expect(reconcilePersistedDelivery(sent)).toEqual({ state: 'reconciled', delivery: 'sent' })
+    expect(reconcilePersistedDelivery(failed)).toEqual({ state: 'reconciled', delivery: 'failed' })
+  })
+
+  it.each(['complete', 'fail'] as const)(
+    'fails closed without invoking hostile pending getters during %s',
+    (operation) => {
+      const attemptGetter = vi.fn(() => {
+        throw new Error('visitor@example.test token=secret')
+      })
+      const hostilePending = {
+        deliveryStatus: 'pending' as const,
+        lastDeliveryAttemptAt: ATTEMPTED_AT.toISOString(),
+        deliveredAt: null,
+        deliveryError: null,
+      }
+      Object.defineProperty(hostilePending, 'deliveryAttempts', {
+        enumerable: true,
+        get: attemptGetter,
+      })
+
+      const build = () =>
+        operation === 'complete'
+          ? completeDeliveryAttempt(hostilePending as never, DELIVERED_AT)
+          : failDeliveryAttempt(hostilePending as never, new Error('provider secret'))
+
+      expect(build).toThrowError('Invalid pending delivery transition')
+      expect(attemptGetter).not.toHaveBeenCalled()
+    },
+  )
+
   it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER])(
     'fails closed for invalid current attempt count %s',
     (attempts) => {
@@ -263,6 +319,30 @@ describe('attemptDelivery', () => {
         clock: () => times.shift() ?? new Date('invalid'),
       }),
     ).rejects.toThrowError('Invalid delivery timestamp')
+    expect(send).toHaveBeenCalledOnce()
+  })
+
+  it('returns reconciled sent state when the success clock moves backward', async () => {
+    const send = vi.fn().mockResolvedValue({ ok: true, id: 'message-123' })
+    const times = [DELIVERED_AT, ATTEMPTED_AT]
+
+    const result = await attemptDelivery({
+      currentAttempts: 0,
+      send,
+      clock: () => times.shift() ?? ATTEMPTED_AT,
+    })
+
+    expect(result.final).toEqual({
+      deliveryStatus: 'sent',
+      deliveryAttempts: 1,
+      lastDeliveryAttemptAt: DELIVERED_AT.toISOString(),
+      deliveredAt: DELIVERED_AT.toISOString(),
+      deliveryError: null,
+    })
+    expect(reconcilePersistedDelivery(result.final)).toEqual({
+      state: 'reconciled',
+      delivery: 'sent',
+    })
     expect(send).toHaveBeenCalledOnce()
   })
 

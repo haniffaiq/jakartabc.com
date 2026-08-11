@@ -116,10 +116,12 @@ export interface SubmissionCoordinator {
 existing non-resumable row, or an initial-delivery CAS no-match. It accepts Payload's canonical UTC
 millisecond ISO strings only. Ambiguous pending and terminal states require a safe-integer attempt
 count of at least one plus coherent timestamp/null/error fields; sent delivery cannot precede its
-last attempt, and failed delivery accepts only the exact bounded outputs of `sanitizeDeliveryError`.
-Untouched pending/attempt-zero and every malformed state return the frozen `invalid` result without
-throwing or copying persisted/customer/provider data. The narrow pre-CAS resumability check is the
-only place where untouched pending/attempt-zero may proceed toward the atomic claim.
+last attempt. The sent transition clamps a backward completion clock to the last-attempt timestamp
+so a successful provider call still produces persistable state. Failed delivery accepts only the
+exact bounded outputs of `sanitizeDeliveryError`. Untouched pending/attempt-zero and every malformed
+state return the frozen `invalid` result without throwing or copying persisted/customer/provider
+data. The narrow pre-CAS resumability check is the only place where untouched
+pending/attempt-zero may proceed toward the atomic claim.
 
 Do not rename these public types in downstream tasks without updating this plan and all consumers in the same serialized barrier.
 
