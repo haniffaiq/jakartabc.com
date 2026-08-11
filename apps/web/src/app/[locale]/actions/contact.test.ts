@@ -103,6 +103,8 @@ const persistedContactFields = {
   message: validContact.message,
   locale: validContact.locale,
 }
+const persistedAttemptedAt = '2026-08-10T10:00:00.000Z'
+const persistedDeliveredAt = '2026-08-10T10:00:01.000Z'
 
 const trustedProxySecret = 'proxy-secret-value-that-is-at-least-32-characters'
 const lease = Object.freeze({ submissionId, token: 'lease-token' })
@@ -421,6 +423,8 @@ describe('submitContact', () => {
       submissionId,
       deliveryStatus: 'failed',
       deliveryAttempts: 1,
+      lastDeliveryAttemptAt: persistedAttemptedAt,
+      deliveredAt: null,
       deliveryError: 'delivery.provider-send-failed|TimeoutError',
     })
 
@@ -591,7 +595,9 @@ describe('submitContact', () => {
       submissionId,
       deliveryStatus: 'pending',
       deliveryAttempts: 1,
-      lastDeliveryAttemptAt: '2026-08-10T10:00:00.000Z',
+      lastDeliveryAttemptAt: persistedAttemptedAt,
+      deliveredAt: null,
+      deliveryError: null,
     })
 
     expect(await submitContact(fd(validContact))).toEqual({
@@ -638,6 +644,9 @@ describe('submitContact', () => {
       submissionId,
       deliveryStatus: 'sent',
       deliveryAttempts: 1,
+      lastDeliveryAttemptAt: persistedAttemptedAt,
+      deliveredAt: persistedDeliveredAt,
+      deliveryError: null,
     })
 
     expect(await submitContact(fd(validContact))).toEqual({
@@ -674,6 +683,9 @@ describe('submitContact', () => {
         submissionId,
         deliveryStatus: 'sent',
         deliveryAttempts: 1,
+        lastDeliveryAttemptAt: persistedAttemptedAt,
+        deliveredAt: persistedDeliveredAt,
+        deliveryError: null,
       })
       throw new Error('duplicate key with private database details')
     })
@@ -748,11 +760,7 @@ describe('submitContact', () => {
   it('reconciles a lost initial claim without sending or writing through Local API', async () => {
     mocks.claimQuery.mockResolvedValueOnce({ rowCount: 0, rows: [] })
 
-    expect(await submitContact(fd(validContact))).toEqual({
-      ok: true,
-      submissionId,
-      delivery: 'pending',
-    })
+    expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
     expect(rows.get(submissionId)).toMatchObject({
       deliveryStatus: 'pending',
       deliveryAttempts: 0,
@@ -760,7 +768,95 @@ describe('submitContact', () => {
     expect(mocks.find).toHaveBeenCalledTimes(2)
     expect(mocks.update).not.toHaveBeenCalled()
     expect(mocks.sendEmail).not.toHaveBeenCalled()
-    expect(mocks.complete).toHaveBeenCalledWith(lease)
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.release).toHaveBeenCalledWith(lease)
+  })
+
+  it.each([
+    [
+      'pending with a delivery error',
+      {
+        deliveryStatus: 'pending' as const,
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: persistedAttemptedAt,
+        deliveredAt: null,
+        deliveryError: 'delivery.provider-send-failed|TimeoutError',
+      },
+    ],
+    [
+      'non-integer attempts',
+      {
+        deliveryStatus: 'failed' as const,
+        deliveryAttempts: 1.5,
+        lastDeliveryAttemptAt: persistedAttemptedAt,
+        deliveredAt: null,
+        deliveryError: 'delivery.provider-send-failed|TimeoutError',
+      },
+    ],
+    [
+      'non-canonical attempt timestamp',
+      {
+        deliveryStatus: 'pending' as const,
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: '2026-08-10T10:00:00Z',
+        deliveredAt: null,
+        deliveryError: null,
+      },
+    ],
+    [
+      'sent before its last attempt',
+      {
+        deliveryStatus: 'sent' as const,
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: persistedDeliveredAt,
+        deliveredAt: persistedAttemptedAt,
+        deliveryError: null,
+      },
+    ],
+    [
+      'failed with an unstable error',
+      {
+        deliveryStatus: 'failed' as const,
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: persistedAttemptedAt,
+        deliveredAt: null,
+        deliveryError: 'raw provider secret',
+      },
+    ],
+    [
+      'unknown terminal state',
+      {
+        deliveryStatus: 'queued' as DeliveryStatus,
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: persistedAttemptedAt,
+        deliveredAt: null,
+        deliveryError: null,
+      },
+    ],
+  ])('fails closed for an existing row with %s', async (_case, delivery) => {
+    rows.set(submissionId, { id: 31, submissionId, ...delivery })
+
+    expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.release).toHaveBeenCalledWith(lease)
+  })
+
+  it('fails closed when a completed marker points to an untouched pending row', async () => {
+    coordinatorState = 'completed'
+    rows.set(submissionId, {
+      id: 32,
+      submissionId,
+      deliveryStatus: 'pending',
+      deliveryAttempts: 0,
+    })
+
+    expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.release).not.toHaveBeenCalled()
   })
 
   it('keeps attempts untouched when owner email preparation fails and retries once', async () => {

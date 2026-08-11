@@ -11,6 +11,7 @@ import { getPayloadClient } from '@/lib/payload'
 import { getClientIP } from '@/lib/request/client-ip'
 import {
   attemptDelivery,
+  reconcilePersistedDelivery,
   type DeliveryAttemptResult,
   type DeliveryStatus,
   type PendingDeliveryTransition,
@@ -92,17 +93,6 @@ function logEvent(level: 'error' | 'warn', event: string, submissionId?: string)
   console[level]('[contact]', submissionId ? { event, submissionId } : { event })
 }
 
-function persistedDelivery(document: ContactDocument): DeliveryStatus {
-  if (
-    document.deliveryStatus === 'pending' ||
-    document.deliveryStatus === 'sent' ||
-    document.deliveryStatus === 'failed'
-  ) {
-    return document.deliveryStatus
-  }
-  throw new Error('Invalid persisted delivery state')
-}
-
 function isUntouchedPending(document: ContactDocument) {
   return document.deliveryStatus === 'pending' && document.deliveryAttempts === 0
 }
@@ -179,10 +169,8 @@ async function completeExisting(
   submissionId: string,
   lease?: SubmissionLease,
 ): Promise<SubmitResult> {
-  let delivery: DeliveryStatus
-  try {
-    delivery = persistedDelivery(document)
-  } catch {
+  const reconciliation = reconcilePersistedDelivery(document)
+  if (reconciliation.state === 'invalid') {
     if (lease) await releaseLease(lease)
     logEvent('error', 'persisted-delivery-state-invalid', submissionId)
     return { ok: false, code: 'persistence' }
@@ -192,7 +180,7 @@ async function completeExisting(
     return { ok: false, code: 'temporarily-unavailable' }
   }
 
-  return { ok: true, submissionId, delivery }
+  return { ok: true, submissionId, delivery: reconciliation.delivery }
 }
 
 export async function submitContact(formData: FormData, _ip?: string): Promise<SubmitResult> {
@@ -473,6 +461,6 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
   return {
     ok: true,
     submissionId: data.submissionId,
-    delivery: persistedDelivery(document),
+    delivery: ownerAttempt.final.deliveryStatus,
   }
 }
