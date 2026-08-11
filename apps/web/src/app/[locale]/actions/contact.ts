@@ -164,6 +164,17 @@ async function releaseLease(lease: SubmissionLease) {
   }
 }
 
+async function renewLease(lease: SubmissionLease, checkpoint: 'pending-claim' | 'owner-send') {
+  try {
+    const result = await submissionCoordinator.renew(lease)
+    if (result.state === 'renewed') return true
+    logEvent('warn', `submission-lease-${checkpoint}-renewal-lost`, lease.submissionId)
+  } catch {
+    logEvent('error', `submission-lease-${checkpoint}-renewal-failed`, lease.submissionId)
+  }
+  return false
+}
+
 async function completeLease(lease: SubmissionLease) {
   try {
     const result = await submissionCoordinator.complete(lease)
@@ -341,6 +352,9 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'
   const currentAttempts = document.deliveryAttempts ?? 0
   const attemptedAt = new Date()
+  if (!(await renewLease(lease, 'pending-claim'))) {
+    return { ok: false, code: 'temporarily-unavailable' }
+  }
   let pending: PendingDeliveryTransition
   try {
     pending = beginDeliveryAttempt(currentAttempts, attemptedAt)
@@ -363,6 +377,35 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
     return { ok: false, code: 'persistence' }
   }
 
+  let preparedOwnerMail: Parameters<typeof sendEmail>[0]
+  try {
+    const salesHtml = await render(
+      React.createElement(ContactSales, {
+        messageId: document.id,
+        name: deliveryData.name,
+        email: deliveryData.email,
+        company,
+        message: deliveryData.message,
+        locale: deliveryData.locale,
+        siteUrl,
+      }),
+    )
+    preparedOwnerMail = {
+      to: salesEmail,
+      subject: subjects.contactSales(deliveryData.name),
+      html: salesHtml,
+      text: `${deliveryData.name} <${deliveryData.email}>${company ? `\n${company}` : ''}\n\n${deliveryData.message}`,
+    }
+  } catch {
+    await releaseLease(lease)
+    logEvent('error', 'owner-delivery-prepare-failed', data.submissionId)
+    return { ok: false, code: 'persistence' }
+  }
+
+  if (!(await renewLease(lease, 'owner-send'))) {
+    return { ok: false, code: 'temporarily-unavailable' }
+  }
+
   let ownerAttempt: Awaited<ReturnType<typeof attemptDelivery>>
   try {
     let initialClockRead = true
@@ -375,25 +418,7 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
         }
         return new Date()
       },
-      send: async () => {
-        const salesHtml = await render(
-          React.createElement(ContactSales, {
-            messageId: document.id,
-            name: deliveryData.name,
-            email: deliveryData.email,
-            company,
-            message: deliveryData.message,
-            locale: deliveryData.locale,
-            siteUrl,
-          }),
-        )
-        return sendEmail({
-          to: salesEmail,
-          subject: subjects.contactSales(deliveryData.name),
-          html: salesHtml,
-          text: `${deliveryData.name} <${deliveryData.email}>${company ? `\n${company}` : ''}\n\n${deliveryData.message}`,
-        })
-      },
+      send: () => sendEmail(preparedOwnerMail),
     })
     if (!samePendingTransition(pending, ownerAttempt.pending)) {
       throw new Error('Delivery pending transition diverged')

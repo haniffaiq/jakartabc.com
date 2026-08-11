@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   find: vi.fn(),
   headersGet: vi.fn(),
+  renew: vi.fn(),
   release: vi.fn(),
   sendEmail: vi.fn(),
   update: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock('@/lib/anti-spam/idempotency', () => ({
     acquire: mocks.acquire,
     complete: mocks.complete,
     rateLimit: mocks.rateLimit,
+    renew: mocks.renew,
     release: mocks.release,
   },
 }))
@@ -100,11 +102,20 @@ const lease = Object.freeze({ submissionId, token: 'lease-token' })
 describe('submitContact', () => {
   const rows = new Map<string, ContactRow>()
   let coordinatorState: 'free' | 'in-progress' | 'completed'
+  let activeLeaseToken: string | undefined
+  let leaseSequence: number
+
+  function expireActiveLease() {
+    activeLeaseToken = undefined
+    coordinatorState = 'free'
+  }
 
   beforeEach(() => {
     vi.restoreAllMocks()
     rows.clear()
     coordinatorState = 'free'
+    activeLeaseToken = undefined
+    leaseSequence = 0
     for (const mock of Object.values(mocks)) mock.mockReset()
 
     mocks.verifyTurnstile.mockResolvedValue(true)
@@ -117,14 +128,33 @@ describe('submitContact', () => {
     mocks.acquire.mockImplementation(async () => {
       if (coordinatorState === 'completed') return { state: 'completed' }
       if (coordinatorState === 'in-progress') return { state: 'in-progress' }
+      leaseSequence += 1
+      const acquiredLease = Object.freeze({
+        submissionId,
+        token: leaseSequence === 1 ? 'lease-token' : `lease-token-${leaseSequence}`,
+      })
+      activeLeaseToken = acquiredLease.token
       coordinatorState = 'in-progress'
-      return { state: 'acquired', lease }
+      return { state: 'acquired', lease: acquiredLease }
     })
-    mocks.complete.mockImplementation(async () => {
+    mocks.renew.mockImplementation(async (candidate: typeof lease) => {
+      return coordinatorState === 'in-progress' && activeLeaseToken === candidate.token
+        ? { state: 'renewed' }
+        : { state: 'lease-lost' }
+    })
+    mocks.complete.mockImplementation(async (candidate: typeof lease) => {
+      if (coordinatorState !== 'in-progress' || activeLeaseToken !== candidate.token) {
+        return { state: 'lease-lost' }
+      }
+      activeLeaseToken = undefined
       coordinatorState = 'completed'
       return { state: 'completed' }
     })
-    mocks.release.mockImplementation(async () => {
+    mocks.release.mockImplementation(async (candidate: typeof lease) => {
+      if (coordinatorState !== 'in-progress' || activeLeaseToken !== candidate.token) {
+        return { state: 'lease-lost' }
+      }
+      activeLeaseToken = undefined
       coordinatorState = 'free'
       return { state: 'released' }
     })
@@ -695,6 +725,115 @@ describe('submitContact', () => {
     expect(mocks.sendEmail).not.toHaveBeenCalled()
     expect(mocks.complete).not.toHaveBeenCalled()
     expect(mocks.release).toHaveBeenCalledWith(lease)
+  })
+
+  it.each([
+    ['lost ownership', { state: 'lease-lost' }],
+    ['malformed response', { state: 'unexpected' }],
+  ])('fails closed before the pending claim on %s', async (_case, renewal) => {
+    mocks.renew.mockResolvedValueOnce(renewal)
+
+    expect(await submitContact(fd(validContact))).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(mocks.renew).toHaveBeenCalledOnce()
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+  })
+
+  it('fails closed before the pending claim when Redis renewal throws', async () => {
+    mocks.renew.mockRejectedValueOnce(new Error('redis://:secret@redis/private'))
+
+    expect(await submitContact(fd(validContact))).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['lost ownership', { state: 'lease-lost' }],
+    ['malformed response', { state: 'unexpected' }],
+  ])(
+    'leaves the durable pending claim neutral when pre-send renewal has %s',
+    async (_case, renewal) => {
+      mocks.renew.mockResolvedValueOnce({ state: 'renewed' }).mockResolvedValueOnce(renewal)
+
+      expect(await submitContact(fd(validContact))).toEqual({
+        ok: false,
+        code: 'temporarily-unavailable',
+      })
+      expect(mocks.renew).toHaveBeenCalledTimes(2)
+      expect(mocks.update).toHaveBeenCalledOnce()
+      expect(rows.get(submissionId)).toMatchObject({
+        deliveryStatus: 'pending',
+        deliveryAttempts: 1,
+      })
+      expect(mocks.sendEmail).not.toHaveBeenCalled()
+      expect(mocks.complete).not.toHaveBeenCalled()
+    },
+  )
+
+  it('leaves the durable pending claim neutral when pre-send Redis renewal throws', async () => {
+    mocks.renew
+      .mockResolvedValueOnce({ state: 'renewed' })
+      .mockRejectedValueOnce(new Error('redis://:secret@redis/private'))
+
+    expect(await submitContact(fd(validContact))).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(mocks.update).toHaveBeenCalledOnce()
+    expect(rows.get(submissionId)).toMatchObject({
+      deliveryStatus: 'pending',
+      deliveryAttempts: 1,
+    })
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+  })
+
+  it('allows only the current lease token to cross the send fence', async () => {
+    let signalOldRenewStarted!: () => void
+    const oldRenewStarted = new Promise<void>((resolve) => {
+      signalOldRenewStarted = resolve
+    })
+    let allowOldRenew!: () => void
+    const oldRenewGate = new Promise<void>((resolve) => {
+      allowOldRenew = resolve
+    })
+    mocks.renew.mockImplementation(async (candidate: typeof lease) => {
+      if (candidate.token === 'lease-token') {
+        signalOldRenewStarted()
+        await oldRenewGate
+      }
+      return coordinatorState === 'in-progress' && activeLeaseToken === candidate.token
+        ? { state: 'renewed' }
+        : { state: 'lease-lost' }
+    })
+
+    const oldWorker = submitContact(fd(validContact))
+    await oldRenewStarted
+    expireActiveLease()
+
+    const currentWorker = await submitContact(fd(validContact))
+    allowOldRenew()
+    const staleWorker = await oldWorker
+
+    expect(currentWorker).toEqual({ ok: true, submissionId, delivery: 'sent' })
+    expect(staleWorker).toEqual({ ok: false, code: 'temporarily-unavailable' })
+    expect(mocks.create).toHaveBeenCalledOnce()
+    expect(
+      mocks.sendEmail.mock.calls.filter(([message]) => message.to === 'sales@example.com'),
+    ).toHaveLength(1)
+    expect(mocks.renew.mock.calls.map(([candidate]) => candidate.token)).toEqual([
+      'lease-token',
+      'lease-token-2',
+      'lease-token-2',
+    ])
   })
 
   it.each([
