@@ -5,6 +5,7 @@ import {
   beginDeliveryAttempt,
   completeDeliveryAttempt,
   failDeliveryAttempt,
+  reconcilePersistedDelivery,
   sanitizeDeliveryError,
 } from './delivery'
 
@@ -42,6 +43,62 @@ describe('delivery transitions', () => {
     expect(Object.isFrozen(sent)).toBe(true)
     expect(pending).not.toBe(sent)
   })
+
+  it('clamps a backward completion clock to the last attempt timestamp', () => {
+    const pending = beginDeliveryAttempt(0, DELIVERED_AT)
+    const sent = completeDeliveryAttempt(pending, ATTEMPTED_AT)
+
+    expect(sent.deliveredAt).toBe(DELIVERED_AT.toISOString())
+    expect(reconcilePersistedDelivery(sent)).toEqual({ state: 'reconciled', delivery: 'sent' })
+  })
+
+  it('keeps a same-time completion timestamp valid', () => {
+    const pending = beginDeliveryAttempt(0, ATTEMPTED_AT)
+    const sent = completeDeliveryAttempt(pending, ATTEMPTED_AT)
+
+    expect(sent.deliveredAt).toBe(ATTEMPTED_AT.toISOString())
+    expect(reconcilePersistedDelivery(sent)).toEqual({ state: 'reconciled', delivery: 'sent' })
+  })
+
+  it('makes every public transition builder output reconcilable state', () => {
+    const pending = beginDeliveryAttempt(0, ATTEMPTED_AT)
+    const sent = completeDeliveryAttempt(pending, DELIVERED_AT)
+    const failed = failDeliveryAttempt(pending, new Error('provider raw secret'))
+
+    expect(reconcilePersistedDelivery(pending)).toEqual({
+      state: 'reconciled',
+      delivery: 'pending',
+    })
+    expect(reconcilePersistedDelivery(sent)).toEqual({ state: 'reconciled', delivery: 'sent' })
+    expect(reconcilePersistedDelivery(failed)).toEqual({ state: 'reconciled', delivery: 'failed' })
+  })
+
+  it.each(['complete', 'fail'] as const)(
+    'fails closed without invoking hostile pending getters during %s',
+    (operation) => {
+      const attemptGetter = vi.fn(() => {
+        throw new Error('visitor@example.test token=secret')
+      })
+      const hostilePending = {
+        deliveryStatus: 'pending' as const,
+        lastDeliveryAttemptAt: ATTEMPTED_AT.toISOString(),
+        deliveredAt: null,
+        deliveryError: null,
+      }
+      Object.defineProperty(hostilePending, 'deliveryAttempts', {
+        enumerable: true,
+        get: attemptGetter,
+      })
+
+      const build = () =>
+        operation === 'complete'
+          ? completeDeliveryAttempt(hostilePending as never, DELIVERED_AT)
+          : failDeliveryAttempt(hostilePending as never, new Error('provider secret'))
+
+      expect(build).toThrowError('Invalid pending delivery transition')
+      expect(attemptGetter).not.toHaveBeenCalled()
+    },
+  )
 
   it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER])(
     'fails closed for invalid current attempt count %s',
@@ -265,6 +322,30 @@ describe('attemptDelivery', () => {
     expect(send).toHaveBeenCalledOnce()
   })
 
+  it('returns reconciled sent state when the success clock moves backward', async () => {
+    const send = vi.fn().mockResolvedValue({ ok: true, id: 'message-123' })
+    const times = [DELIVERED_AT, ATTEMPTED_AT]
+
+    const result = await attemptDelivery({
+      currentAttempts: 0,
+      send,
+      clock: () => times.shift() ?? ATTEMPTED_AT,
+    })
+
+    expect(result.final).toEqual({
+      deliveryStatus: 'sent',
+      deliveryAttempts: 1,
+      lastDeliveryAttemptAt: DELIVERED_AT.toISOString(),
+      deliveredAt: DELIVERED_AT.toISOString(),
+      deliveryError: null,
+    })
+    expect(reconcilePersistedDelivery(result.final)).toEqual({
+      state: 'reconciled',
+      delivery: 'sent',
+    })
+    expect(send).toHaveBeenCalledOnce()
+  })
+
   it('builds the same failed transition directly without mutating pending state', () => {
     const pending = beginDeliveryAttempt(0, ATTEMPTED_AT)
     const failed = failDeliveryAttempt(pending, new TypeError('api_key=do-not-store'))
@@ -276,5 +357,287 @@ describe('attemptDelivery', () => {
     })
     expect(pending.deliveryStatus).toBe('pending')
     expect(pending.deliveryError).toBeNull()
+  })
+})
+
+describe('reconcilePersistedDelivery', () => {
+  const lastAttemptAt = '2026-08-11T03:04:05.006Z'
+  const deliveredAt = '2026-08-11T03:04:06.007Z'
+
+  it.each([
+    [
+      'ambiguous pending',
+      {
+        deliveryStatus: 'pending',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt: null,
+        deliveryError: null,
+      },
+      'pending',
+    ],
+    [
+      'terminal sent',
+      {
+        deliveryStatus: 'sent',
+        deliveryAttempts: 2,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt,
+        deliveryError: null,
+      },
+      'sent',
+    ],
+    [
+      'terminal failed',
+      {
+        deliveryStatus: 'failed',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt: null,
+        deliveryError: 'delivery.provider-send-failed|TimeoutError',
+      },
+      'failed',
+    ],
+  ])('returns immutable status-only metadata for valid %s state', (_case, record, delivery) => {
+    const result = reconcilePersistedDelivery({
+      ...record,
+      email: 'visitor@example.test',
+      message: 'private customer message',
+    })
+
+    expect(result).toEqual({ state: 'reconciled', delivery })
+    expect(Reflect.ownKeys(result)).toEqual(['state', 'delivery'])
+    expect(Object.isFrozen(result)).toBe(true)
+    expect(JSON.stringify(result)).not.toContain('visitor@example.test')
+    expect(JSON.stringify(result)).not.toContain('private customer message')
+  })
+
+  it.each([
+    'AbortError',
+    'AggregateError',
+    'Error',
+    'FetchError',
+    'ProviderError',
+    'RangeError',
+    'ReferenceError',
+    'SyntaxError',
+    'TimeoutError',
+    'TypeError',
+    'URIError',
+  ])('accepts the exact sanitizer output for failed delivery class %s', (errorClass) => {
+    expect(
+      reconcilePersistedDelivery({
+        deliveryStatus: 'failed',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt: null,
+        deliveryError: `delivery.provider-send-failed|${errorClass}`,
+      }),
+    ).toEqual({ state: 'reconciled', delivery: 'failed' })
+  })
+
+  it.each([
+    [
+      'untouched pending',
+      {
+        deliveryStatus: 'pending',
+        deliveryAttempts: 0,
+        lastDeliveryAttemptAt: null,
+        deliveredAt: null,
+        deliveryError: null,
+      },
+    ],
+    ['null attempts', { deliveryStatus: 'pending', deliveryAttempts: null }],
+    ['string attempts', { deliveryStatus: 'pending', deliveryAttempts: '1' }],
+    ['negative attempts', { deliveryStatus: 'pending', deliveryAttempts: -1 }],
+    ['fractional attempts', { deliveryStatus: 'pending', deliveryAttempts: 1.5 }],
+    [
+      'unsafe attempts',
+      { deliveryStatus: 'pending', deliveryAttempts: Number.MAX_SAFE_INTEGER + 1 },
+    ],
+    [
+      'missing pending timestamp',
+      {
+        deliveryStatus: 'pending',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: null,
+        deliveredAt: null,
+        deliveryError: null,
+      },
+    ],
+    [
+      'Date object timestamp',
+      {
+        deliveryStatus: 'pending',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: new Date(lastAttemptAt),
+        deliveredAt: null,
+        deliveryError: null,
+      },
+    ],
+    [
+      'non-canonical ISO timestamp',
+      {
+        deliveryStatus: 'pending',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: '2026-08-11T03:04:05Z',
+        deliveredAt: null,
+        deliveryError: null,
+      },
+    ],
+    [
+      'impossible ISO timestamp',
+      {
+        deliveryStatus: 'pending',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: '2026-02-30T03:04:05.006Z',
+        deliveredAt: null,
+        deliveryError: null,
+      },
+    ],
+    [
+      'pending with delivered timestamp',
+      {
+        deliveryStatus: 'pending',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt,
+        deliveryError: null,
+      },
+    ],
+    [
+      'pending with error',
+      {
+        deliveryStatus: 'pending',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt: null,
+        deliveryError: 'delivery.provider-send-failed|Error',
+      },
+    ],
+    [
+      'sent before its last attempt',
+      {
+        deliveryStatus: 'sent',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: deliveredAt,
+        deliveredAt: lastAttemptAt,
+        deliveryError: null,
+      },
+    ],
+    [
+      'sent without delivered timestamp',
+      {
+        deliveryStatus: 'sent',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt: null,
+        deliveryError: null,
+      },
+    ],
+    [
+      'sent with error',
+      {
+        deliveryStatus: 'sent',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt,
+        deliveryError: 'delivery.provider-send-failed|Error',
+      },
+    ],
+    [
+      'failed with delivered timestamp',
+      {
+        deliveryStatus: 'failed',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt,
+        deliveryError: 'delivery.provider-send-failed|Error',
+      },
+    ],
+    [
+      'failed without error',
+      {
+        deliveryStatus: 'failed',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt: null,
+        deliveryError: null,
+      },
+    ],
+    [
+      'failed with arbitrary provider class',
+      {
+        deliveryStatus: 'failed',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt: null,
+        deliveryError: 'delivery.provider-send-failed|SMTPError',
+      },
+    ],
+    [
+      'failed with raw provider message',
+      {
+        deliveryStatus: 'failed',
+        deliveryAttempts: 1,
+        lastDeliveryAttemptAt: lastAttemptAt,
+        deliveredAt: null,
+        deliveryError: 'delivery.provider-send-failed|Error|visitor@example.test token=secret',
+      },
+    ],
+    ['unknown status', { deliveryStatus: 'delivered', deliveryAttempts: 1 }],
+    ['null record', null],
+    ['primitive record', 'pending'],
+  ])('fails closed for %s', (_case, record) => {
+    expect(reconcilePersistedDelivery(record)).toBe(reconcilePersistedDelivery(record))
+    expect(reconcilePersistedDelivery(record)).toEqual({ state: 'invalid' })
+    expect(Object.isFrozen(reconcilePersistedDelivery(record))).toBe(true)
+  })
+
+  it('ignores extra hostile getters and never carries their content into the result', () => {
+    const extraGetter = vi.fn(() => 'visitor@example.test token=secret')
+    const record = {
+      deliveryStatus: 'sent',
+      deliveryAttempts: 1,
+      lastDeliveryAttemptAt: lastAttemptAt,
+      deliveredAt,
+      deliveryError: null,
+    }
+    Object.defineProperty(record, 'providerPayload', { enumerable: true, get: extraGetter })
+
+    const result = reconcilePersistedDelivery(record)
+
+    expect(result).toEqual({ state: 'reconciled', delivery: 'sent' })
+    expect(extraGetter).not.toHaveBeenCalled()
+    expect(JSON.stringify(result)).not.toContain('token=secret')
+  })
+
+  it('does not invoke whitelisted getters and fails closed', () => {
+    const statusGetter = vi.fn(() => 'sent')
+    const record = {
+      deliveryAttempts: 1,
+      lastDeliveryAttemptAt: lastAttemptAt,
+      deliveredAt,
+      deliveryError: null,
+    }
+    Object.defineProperty(record, 'deliveryStatus', { enumerable: true, get: statusGetter })
+
+    expect(reconcilePersistedDelivery(record)).toEqual({ state: 'invalid' })
+    expect(statusGetter).not.toHaveBeenCalled()
+  })
+
+  it('never throws or leaks when a proxy rejects descriptor access', () => {
+    const hostile = new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor() {
+          throw new Error('visitor@example.test Bearer token-secret')
+        },
+      },
+    )
+
+    expect(() => reconcilePersistedDelivery(hostile)).not.toThrow()
+    expect(reconcilePersistedDelivery(hostile)).toEqual({ state: 'invalid' })
+    expect(JSON.stringify(reconcilePersistedDelivery(hostile))).not.toContain('token-secret')
   })
 })

@@ -91,6 +91,12 @@ export type RateLimitResult =
 
 export type DeliveryStatus = 'pending' | 'sent' | 'failed'
 
+export type DeliveryReconciliation =
+  | Readonly<{ state: 'reconciled'; delivery: DeliveryStatus }>
+  | Readonly<{ state: 'invalid' }>
+
+export function reconcilePersistedDelivery(record: unknown): DeliveryReconciliation
+
 export type SubmissionResult =
   | { ok: true; submissionId: string; delivery: DeliveryStatus }
   | {
@@ -106,6 +112,17 @@ export interface SubmissionCoordinator {
 }
 ```
 
+`reconcilePersistedDelivery` is the only acceptance classifier for a completed Redis marker, an
+existing non-resumable row, or an initial-delivery CAS no-match. It accepts Payload's canonical UTC
+millisecond ISO strings only. Ambiguous pending and terminal states require a safe-integer attempt
+count of at least one plus coherent timestamp/null/error fields; sent delivery cannot precede its
+last attempt. The sent transition clamps a backward completion clock to the last-attempt timestamp
+so a successful provider call still produces persistable state. Failed delivery accepts only the
+exact bounded outputs of `sanitizeDeliveryError`. Untouched pending/attempt-zero and every malformed
+state return the frozen `invalid` result without throwing or copying persisted/customer/provider
+data. The narrow pre-CAS resumability check is the only place where untouched
+pending/attempt-zero may proceed toward the atomic claim.
+
 Do not rename these public types in downstream tasks without updating this plan and all consumers in the same serialized barrier.
 
 ## File structure map
@@ -119,7 +136,7 @@ Do not rename these public types in downstream tasks without updating this plan 
 - `apps/web/src/lib/anti-spam/idempotency.ts` — Redis submission lock/completed marker.
 - `apps/web/src/lib/request/client-ip.ts` — trusted-proxy client identity extraction.
 - `apps/web/src/lib/url/safe-url.ts` — safe rendered URL and portal redirect canonicalization.
-- `apps/web/src/lib/submissions/delivery.ts` — shared delivery transitions and retry behavior.
+- `apps/web/src/lib/submissions/delivery.ts` — shared delivery transitions, fail-closed persisted-state reconciliation, and retry behavior.
 - `apps/web/src/lib/submissions/deliveryClaim.ts` — fixed-statement PostgreSQL CAS for delivery ownership.
 - `apps/web/src/lib/siteChrome.ts` — cached localized CMS global reads.
 - `apps/web/src/scripts/retry-failed-deliveries.ts` — idempotent operational retry command.
@@ -1089,7 +1106,9 @@ the pure owner-mail render/preparation before the first renewal. Then renew the 
 the untouched `pending`/attempt-zero row with the shared single-statement PostgreSQL CAS, renew
 again immediately before the provider call, send, and persist the final delivery state. A CAS
 no-match must re-read and reconcile the durable row with zero send; malformed state/read failure
-fails closed. A stale worker must never use a Payload update-by-ID to write the pending transition.
+fails closed through `reconcilePersistedDelivery`. The completed-marker branch and every existing
+non-resumable row use the same classifier; none may accept an untouched pending/attempt-zero row.
+A stale worker must never use a Payload update-by-ID to write the pending transition.
 Attempt visitor mail best-effort, mark Redis complete, and return accepted. On pre-persistence Redis
 failure, return `temporarily-unavailable` with the UI fallback email. On an exception after lock
 acquisition but before persistence, release the lock. A durable `deliveryAttempts >= 1` is never
@@ -1148,8 +1167,11 @@ Use scope `booking`, the shared async coordinator, trusted client IP, explicit L
 and the shared delivery transitions. Prepare the owner message before the first renewal; then use
 renew -> initial CAS -> exact claimed-result validation -> renew immediately before provider send.
 A CAS no-match re-reads/reconciles with zero send, and an attempt count of at least one remains
-ambiguous/non-retryable. Do not duplicate Redis, SQL/CAS, error-redaction, field, or email-transition
-helpers inside the action; import the shared interfaces locked above.
+ambiguous/non-retryable. Route completed-marker, existing non-resumable, and CAS no-match rows
+through `reconcilePersistedDelivery`; an untouched pending/attempt-zero row is resumable only before
+the CAS and fails closed in reconciliation. Do not duplicate Redis, SQL/CAS, error-redaction, field,
+persisted-state, or email-transition helpers inside the action; import the shared interfaces locked
+above.
 
 - [ ] **Step 5: Verify and commit**
 

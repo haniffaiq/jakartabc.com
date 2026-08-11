@@ -3,7 +3,13 @@ import type { SendResult } from '@jakartabc/email'
 const DELIVERY_ERROR_EVENT = 'delivery.provider-send-failed'
 const MAX_DELIVERY_ERROR_LENGTH = 500
 const DATE_GET_TIME = Date.prototype.getTime
+const DATE_PARSE = Date.parse
 const DATE_TO_ISO_STRING = Date.prototype.toISOString
+const DATE_CONSTRUCTOR = Date
+const OBJECT_GET_OWN_PROPERTY_DESCRIPTOR = Object.getOwnPropertyDescriptor
+const OBJECT_HAS_OWN_PROPERTY = Object.prototype.hasOwnProperty
+const REGEXP_TEST = RegExp.prototype.test
+const PAYLOAD_UTC_MILLISECOND_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 
 const SAFE_ERROR_NAMES = new Set([
   'AbortError',
@@ -16,6 +22,17 @@ const SAFE_ERROR_NAMES = new Set([
   'TimeoutError',
   'TypeError',
   'URIError',
+])
+
+const INVALID_DELIVERY_RECONCILIATION = Object.freeze({ state: 'invalid' as const })
+const RECONCILED_DELIVERY = Object.freeze({
+  pending: Object.freeze({ state: 'reconciled' as const, delivery: 'pending' as const }),
+  sent: Object.freeze({ state: 'reconciled' as const, delivery: 'sent' as const }),
+  failed: Object.freeze({ state: 'reconciled' as const, delivery: 'failed' as const }),
+})
+const SAFE_DELIVERY_ERRORS = new Set([
+  `${DELIVERY_ERROR_EVENT}|ProviderError`,
+  ...[...SAFE_ERROR_NAMES].map((name) => `${DELIVERY_ERROR_EVENT}|${name}`),
 ])
 
 export type DeliveryStatus = 'pending' | 'sent' | 'failed'
@@ -54,7 +71,124 @@ export type DeliveryAttemptResult = Readonly<{
   final: SentDeliveryTransition | FailedDeliveryTransition
 }>
 
+export type DeliveryReconciliation =
+  | Readonly<{ state: 'reconciled'; delivery: DeliveryStatus }>
+  | typeof INVALID_DELIVERY_RECONCILIATION
+
 export type DeliveryClock = () => Date
+
+type PersistedDeliveryValues = Readonly<{
+  deliveryStatus: unknown
+  deliveryAttempts: unknown
+  lastDeliveryAttemptAt: unknown
+  deliveredAt: unknown
+  deliveryError: unknown
+}>
+
+function persistedDeliveryValues(record: unknown): PersistedDeliveryValues | null {
+  if (typeof record !== 'object' || record === null) return null
+
+  try {
+    const readOwnDataValue = (key: keyof PersistedDeliveryValues) => {
+      const descriptor = Reflect.apply(OBJECT_GET_OWN_PROPERTY_DESCRIPTOR, Object, [
+        record,
+        key,
+      ]) as PropertyDescriptor | undefined
+      if (
+        !descriptor ||
+        !(Reflect.apply(OBJECT_HAS_OWN_PROPERTY, descriptor, ['value']) as boolean)
+      ) {
+        throw new Error('Invalid persisted delivery property')
+      }
+      return descriptor.value as unknown
+    }
+
+    return Object.freeze({
+      deliveryStatus: readOwnDataValue('deliveryStatus'),
+      deliveryAttempts: readOwnDataValue('deliveryAttempts'),
+      lastDeliveryAttemptAt: readOwnDataValue('lastDeliveryAttemptAt'),
+      deliveredAt: readOwnDataValue('deliveredAt'),
+      deliveryError: readOwnDataValue('deliveryError'),
+    })
+  } catch {
+    return null
+  }
+}
+
+function payloadTimestamp(value: unknown): number | null {
+  if (
+    typeof value !== 'string' ||
+    !(Reflect.apply(REGEXP_TEST, PAYLOAD_UTC_MILLISECOND_ISO, [value]) as boolean)
+  ) {
+    return null
+  }
+
+  try {
+    const timestamp = Reflect.apply(DATE_PARSE, DATE_CONSTRUCTOR, [value]) as number
+    if (!Number.isFinite(timestamp)) return null
+    const canonical = Reflect.apply(
+      DATE_TO_ISO_STRING,
+      new DATE_CONSTRUCTOR(timestamp),
+      [],
+    ) as string
+    return canonical === value ? timestamp : null
+  } catch {
+    return null
+  }
+}
+
+function stableDeliveryError(value: unknown) {
+  return typeof value === 'string' && SAFE_DELIVERY_ERRORS.has(value)
+}
+
+function reconcilePersistedDeliveryValues(values: PersistedDeliveryValues): DeliveryReconciliation {
+  const { deliveryStatus, deliveryAttempts, lastDeliveryAttemptAt, deliveredAt, deliveryError } =
+    values
+  if (
+    typeof deliveryAttempts !== 'number' ||
+    !Number.isSafeInteger(deliveryAttempts) ||
+    deliveryAttempts < 1
+  ) {
+    return INVALID_DELIVERY_RECONCILIATION
+  }
+
+  const lastAttemptTime = payloadTimestamp(lastDeliveryAttemptAt)
+  if (lastAttemptTime === null) return INVALID_DELIVERY_RECONCILIATION
+
+  if (deliveryStatus === 'pending') {
+    return deliveredAt === null && deliveryError === null
+      ? RECONCILED_DELIVERY.pending
+      : INVALID_DELIVERY_RECONCILIATION
+  }
+
+  if (deliveryStatus === 'sent') {
+    const deliveredTime = payloadTimestamp(deliveredAt)
+    return deliveredTime !== null && deliveredTime >= lastAttemptTime && deliveryError === null
+      ? RECONCILED_DELIVERY.sent
+      : INVALID_DELIVERY_RECONCILIATION
+  }
+
+  if (deliveryStatus === 'failed') {
+    return deliveredAt === null && stableDeliveryError(deliveryError)
+      ? RECONCILED_DELIVERY.failed
+      : INVALID_DELIVERY_RECONCILIATION
+  }
+
+  return INVALID_DELIVERY_RECONCILIATION
+}
+
+export function reconcilePersistedDelivery(record: unknown): DeliveryReconciliation {
+  const values = persistedDeliveryValues(record)
+  return values ? reconcilePersistedDeliveryValues(values) : INVALID_DELIVERY_RECONCILIATION
+}
+
+function validPendingDeliveryValues(pending: unknown): PendingDeliveryTransition {
+  const values = persistedDeliveryValues(pending)
+  if (!values || reconcilePersistedDeliveryValues(values) !== RECONCILED_DELIVERY.pending) {
+    throw new Error('Invalid pending delivery transition')
+  }
+  return values as PendingDeliveryTransition
+}
 
 function validTimestamp(value: Date) {
   try {
@@ -104,11 +238,20 @@ export function completeDeliveryAttempt(
   pending: PendingDeliveryTransition,
   deliveredAt: Date,
 ): SentDeliveryTransition {
+  const validPending = validPendingDeliveryValues(pending)
+  const completionTimestamp = validTimestamp(deliveredAt)
+  const attemptedTime = payloadTimestamp(validPending.lastDeliveryAttemptAt)
+  const completionTime = payloadTimestamp(completionTimestamp)
+  if (attemptedTime === null || completionTime === null) {
+    throw new Error('Invalid delivery timestamp')
+  }
+
   return Object.freeze({
     deliveryStatus: 'sent',
-    deliveryAttempts: pending.deliveryAttempts,
-    lastDeliveryAttemptAt: pending.lastDeliveryAttemptAt,
-    deliveredAt: validTimestamp(deliveredAt),
+    deliveryAttempts: validPending.deliveryAttempts,
+    lastDeliveryAttemptAt: validPending.lastDeliveryAttemptAt,
+    deliveredAt:
+      completionTime < attemptedTime ? validPending.lastDeliveryAttemptAt : completionTimestamp,
     deliveryError: null,
   })
 }
@@ -117,10 +260,11 @@ export function failDeliveryAttempt(
   pending: PendingDeliveryTransition,
   error: unknown,
 ): FailedDeliveryTransition {
+  const validPending = validPendingDeliveryValues(pending)
   return Object.freeze({
     deliveryStatus: 'failed',
-    deliveryAttempts: pending.deliveryAttempts,
-    lastDeliveryAttemptAt: pending.lastDeliveryAttemptAt,
+    deliveryAttempts: validPending.deliveryAttempts,
+    lastDeliveryAttemptAt: validPending.lastDeliveryAttemptAt,
     deliveredAt: null,
     deliveryError: sanitizeDeliveryError(error),
   })
