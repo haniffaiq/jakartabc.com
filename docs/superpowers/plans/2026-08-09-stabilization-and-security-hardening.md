@@ -1244,6 +1244,11 @@ Expected: FAIL because the retry command and conditional claim behavior do not e
 
 Claim only a row matching `id` and `deliveryStatus = failed`, transition to pending, increment attempts, send, then set sent/failed. The script accepts `--collection contact-messages|booking-leads`, `--limit 100`, and `--dry-run`; it requires authenticated operational execution and logs IDs/status only.
 
+Do not automatically claim stale `pending` rows. A crash after the provider accepted a message but
+before the final database update leaves an ambiguous outcome; relabeling it `failed` or retrying it
+can send the owner message twice. Report stale pending IDs/status for authenticated operator audit
+only. A pending retry requires separate provider-idempotency proof or an explicit manual decision.
+
 - [ ] **Step 4: Add the package script**
 
 Add `"delivery:retry": "tsx src/scripts/retry-failed-deliveries.ts"`.

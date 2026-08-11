@@ -6,7 +6,9 @@ const { resendSendMock, nodemailerSendMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('resend', () => ({
-  Resend: vi.fn(() => ({ emails: { send: resendSendMock } })),
+  Resend: vi.fn(function ResendMock() {
+    return { emails: { send: resendSendMock } }
+  }),
 }))
 
 vi.mock('nodemailer', () => ({
@@ -20,6 +22,7 @@ const baseArgs = { to: 'x@y.com', subject: 'S', html: '<p>h</p>', text: 'h' }
 
 describe('sendEmail', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
     resendSendMock.mockReset()
     nodemailerSendMock.mockReset()
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -88,17 +91,81 @@ describe('sendEmail', () => {
   it('returns ok=false on Resend error', async () => {
     process.env.EMAIL_PROVIDER = 'resend'
     process.env.RESEND_API_KEY = 'key'
-    resendSendMock.mockResolvedValue({ data: null, error: { message: 'bounce' } })
+    const providerError =
+      'victim@example.com Bearer secret-token https://user:pass@example.com/path?api_key=secret'
+    resendSendMock.mockResolvedValue({ data: null, error: { message: providerError } })
 
     const res = await sendEmail({ ...baseArgs, html: 'h' })
 
-    expect(res).toEqual({ ok: false, error: 'bounce' })
-    expect(console.error).toHaveBeenCalledWith('[email] send failed: bounce')
+    expect(res).toEqual({ ok: false, error: providerError })
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      '[email] send_failed provider=resend class=provider_rejected',
+    )
   })
 
   it('returns ok=false when provider env is missing', async () => {
     process.env.EMAIL_PROVIDER = 'smtp'
 
     await expect(sendEmail(baseArgs)).resolves.toEqual({ ok: false, error: 'SMTP_* env missing' })
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      '[email] send_failed provider=smtp class=configuration',
+    )
+  })
+
+  it('logs only a stable class when SMTP throws sensitive provider text', async () => {
+    process.env.EMAIL_PROVIDER = 'smtp'
+    process.env.SMTP_HOST = 'smtp.x'
+    process.env.SMTP_USER = 'u'
+    process.env.SMTP_PASS = 'p'
+    const providerError =
+      'victim@example.com token=secret https://user:pass@example.com/path?password=secret'
+    nodemailerSendMock.mockRejectedValue(new Error(providerError))
+
+    await expect(sendEmail(baseArgs)).resolves.toEqual({ ok: false, error: providerError })
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      '[email] send_failed provider=smtp class=provider_exception',
+    )
+  })
+
+  it('does not inspect hostile provider error getters while logging', async () => {
+    process.env.RESEND_API_KEY = 'key'
+    const hostile = Object.create(null)
+    Object.defineProperty(hostile, 'message', {
+      get() {
+        throw new Error('getter-secret@example.com Bearer getter-token')
+      },
+    })
+    Object.defineProperty(hostile, 'toString', {
+      get() {
+        throw new Error('to-string-getter-secret')
+      },
+    })
+    resendSendMock.mockResolvedValue({ data: null, error: hostile })
+
+    await expect(sendEmail(baseArgs)).resolves.toEqual({
+      ok: false,
+      error: 'Unknown email provider error',
+    })
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      '[email] send_failed provider=resend class=provider_rejected',
+    )
+  })
+
+  it('does not expose a hostile thrown value or invoke it while logging', async () => {
+    process.env.RESEND_API_KEY = 'key'
+    const hostile = {
+      toString() {
+        throw new Error('to-string-secret@example.com?token=secret')
+      },
+    }
+    resendSendMock.mockRejectedValue(hostile)
+
+    await expect(sendEmail(baseArgs)).resolves.toEqual({
+      ok: false,
+      error: 'Unknown email provider error',
+    })
+    expect(console.error).toHaveBeenCalledExactlyOnceWith(
+      '[email] send_failed provider=resend class=provider_exception',
+    )
   })
 })
