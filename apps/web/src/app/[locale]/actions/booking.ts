@@ -16,6 +16,7 @@ import { getPayloadClient } from '@/lib/payload'
 import { getClientIP } from '@/lib/request/client-ip'
 import {
   attemptDelivery,
+  reconcilePersistedDelivery,
   type DeliveryStatus,
   type DeliveryTransition,
 } from '@/lib/submissions/delivery'
@@ -118,13 +119,27 @@ function operationalFailure(submissionId: string, event: string): SubmitBookingR
   return { ok: false, code: 'temporarily-unavailable' }
 }
 
-function deliveryState(document: BookingLeadDoc): DeliveryStatus | null {
-  const value = document.deliveryStatus
-  return value === 'pending' || value === 'sent' || value === 'failed' ? value : null
-}
-
 function canResumeBeforeOwnerAttempt(document: BookingLeadDoc) {
-  return deliveryState(document) === 'pending' && document.deliveryAttempts === 0
+  try {
+    return isDeepStrictEqual(
+      {
+        deliveryStatus: document.deliveryStatus,
+        deliveryAttempts: document.deliveryAttempts,
+        lastDeliveryAttemptAt: document.lastDeliveryAttemptAt,
+        deliveredAt: document.deliveredAt,
+        deliveryError: document.deliveryError,
+      },
+      {
+        deliveryStatus: 'pending',
+        deliveryAttempts: 0,
+        lastDeliveryAttemptAt: null,
+        deliveredAt: null,
+        deliveryError: null,
+      },
+    )
+  } catch {
+    return false
+  }
 }
 
 function hydratePersistedBookingMail(
@@ -297,11 +312,12 @@ async function reconcileExisting(
   lease: SubmissionLease,
   submissionId: string,
 ): Promise<SubmitBookingResult> {
-  const delivery = deliveryState(existing)
-  if (!delivery) {
+  const reconciliation = reconcilePersistedDelivery(existing)
+  if (reconciliation.state === 'invalid') {
     await releaseLease(lease)
     return operationalFailure(submissionId, 'invalid-existing-delivery-state')
   }
+  const delivery = reconciliation.delivery
   if (delivery === 'pending') {
     console.warn('[booking] existing-delivery-pending', { submissionId })
   }
@@ -363,9 +379,9 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   if (acquisition.state === 'completed') {
     try {
       const existing = await findBookingBySubmissionId(payload, data.submissionId)
-      const delivery = existing ? deliveryState(existing) : null
-      return delivery
-        ? accepted(data.submissionId, delivery)
+      const reconciliation = reconcilePersistedDelivery(existing)
+      return reconciliation.state === 'reconciled'
+        ? accepted(data.submissionId, reconciliation.delivery)
         : operationalFailure(data.submissionId, 'completed-row-unavailable')
     } catch {
       return operationalFailure(data.submissionId, 'completed-row-lookup-failed')

@@ -105,11 +105,16 @@ function fd(map = goodData) {
 }
 
 function bookingRow(deliveryStatus: 'pending' | 'sent' | 'failed' = 'sent', deliveryAttempts = 1) {
+  const lastDeliveryAttemptAt = deliveryAttempts > 0 ? '2026-08-11T03:04:05.006Z' : null
   return {
     id: 42,
     submissionId: SUBMISSION_ID,
     deliveryStatus,
     deliveryAttempts,
+    lastDeliveryAttemptAt,
+    deliveredAt: deliveryStatus === 'sent' ? '2026-08-11T03:04:06.007Z' : null,
+    deliveryError:
+      deliveryStatus === 'failed' ? 'delivery.provider-send-failed|ProviderError' : null,
     name: 'Maria T',
     email: 'maria@example.co',
     company: 'Solstice',
@@ -579,6 +584,24 @@ describe('submitBooking', () => {
     expect(createMock).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['untouched pending', bookingRow('pending', 0)],
+    ['malformed sent', { ...bookingRow('sent', 1), deliveredAt: null }],
+  ])('fails closed for %s behind a completed marker', async (_case, persisted) => {
+    acquireMock.mockResolvedValueOnce({ state: 'completed' })
+    findMock.mockResolvedValueOnce({ docs: [persisted] })
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(releaseMock).not.toHaveBeenCalled()
+    expect(completeMock).not.toHaveBeenCalled()
+    expect(createMock).not.toHaveBeenCalled()
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
   it('distinguishes a confirmed unknown service from lookup infrastructure failure', async () => {
     findMock.mockResolvedValueOnce({ docs: [] }).mockResolvedValueOnce({ docs: [] })
 
@@ -606,6 +629,27 @@ describe('submitBooking', () => {
     expect(updateMock).not.toHaveBeenCalled()
     expect(sendMock).not.toHaveBeenCalled()
     expect(completeMock).toHaveBeenCalledWith(LEASE)
+  })
+
+  it.each([
+    ['malformed terminal', { ...bookingRow('sent', 1), deliveredAt: null }],
+    [
+      'malformed untouched pending',
+      { ...bookingRow('pending', 0), deliveredAt: '2026-08-11T03:04:06.007Z' },
+    ],
+  ])('releases the lease without accepting %s persisted state', async (_case, persisted) => {
+    findMock.mockResolvedValueOnce({ docs: [persisted] })
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(releaseMock).toHaveBeenCalledWith(LEASE)
+    expect(completeMock).not.toHaveBeenCalled()
+    expect(claimMock).not.toHaveBeenCalled()
+    expect(createMock).not.toHaveBeenCalled()
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
   })
 
   it('keeps an ambiguous existing pending row neutral and emits only a structured audit event', async () => {
@@ -732,6 +776,28 @@ describe('submitBooking', () => {
     expect(updateMock).not.toHaveBeenCalled()
     expect(sendMock).not.toHaveBeenCalled()
     expect(completeMock).toHaveBeenCalledWith(LEASE)
+  })
+
+  it('fails closed when CAS no-match re-reads an untouched pending row', async () => {
+    findMock.mockResolvedValue({ docs: [bookingRow('pending', 0)] })
+    claimMock.mockResolvedValueOnce({ state: 'not-claimed' })
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(findMock).toHaveBeenLastCalledWith({
+      collection: 'booking-leads',
+      where: { submissionId: { equals: SUBMISSION_ID } },
+      limit: 1,
+      overrideAccess: true,
+      depth: 1,
+      locale: 'all',
+    })
+    expect(releaseMock).toHaveBeenCalledWith(LEASE)
+    expect(completeMock).not.toHaveBeenCalled()
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
   })
 
   it('hydrates a stranded retry only from persisted row A when FormData B reuses its UUID', async () => {
