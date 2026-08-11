@@ -16,10 +16,13 @@ import { getPayloadClient } from '@/lib/payload'
 import { getClientIP } from '@/lib/request/client-ip'
 import {
   attemptDelivery,
-  beginDeliveryAttempt,
   type DeliveryStatus,
   type DeliveryTransition,
 } from '@/lib/submissions/delivery'
+import {
+  claimInitialDeliveryAttempt,
+  type DeliveryClaimDatabase,
+} from '@/lib/submissions/deliveryClaim'
 import { bookingSchema, type BookingInput } from '@/lib/validation/booking'
 
 export type SubmitBookingResult =
@@ -60,6 +63,7 @@ type BookingLeadDoc = {
 }
 
 type PayloadBookingClient = {
+  db: { pool: DeliveryClaimDatabase }
   find: (args: {
     collection: 'services' | 'booking-leads'
     where: Record<string, { equals: string }>
@@ -121,23 +125,6 @@ function deliveryState(document: BookingLeadDoc): DeliveryStatus | null {
 
 function canResumeBeforeOwnerAttempt(document: BookingLeadDoc) {
   return deliveryState(document) === 'pending' && document.deliveryAttempts === 0
-}
-
-function hasExactPersistedTransition(document: BookingLeadDoc, transition: DeliveryTransition) {
-  try {
-    return isDeepStrictEqual(
-      {
-        deliveryStatus: document.deliveryStatus,
-        deliveryAttempts: document.deliveryAttempts,
-        lastDeliveryAttemptAt: document.lastDeliveryAttemptAt,
-        deliveredAt: document.deliveredAt,
-        deliveryError: document.deliveryError,
-      },
-      transition,
-    )
-  } catch {
-    return false
-  }
 }
 
 function hydratePersistedBookingMail(
@@ -481,13 +468,24 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
     await releaseLease(lease)
     return operationalFailure(data.submissionId, 'persisted-booking-hydration-failed')
   }
+  const leadId = lead.id
+  const leadSubmissionId = lead.submissionId
+  if (
+    typeof leadId !== 'number' ||
+    !Number.isSafeInteger(leadId) ||
+    leadId <= 0 ||
+    leadSubmissionId !== data.submissionId
+  ) {
+    await releaseLease(lease)
+    return operationalFailure(data.submissionId, 'persisted-booking-identity-invalid')
+  }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'
   let preparedOwnerMail: Awaited<ReturnType<typeof prepareOwnerMail>>
   try {
     preparedOwnerMail = await prepareOwnerMail({
       data: persistedMail.data,
-      leadId: lead.id,
+      leadId,
       salesEmail,
       serviceName: persistedMail.serviceName,
       siteUrl,
@@ -503,23 +501,34 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   }
 
   const attemptedAt = new Date()
-  const pending = beginDeliveryAttempt(0, attemptedAt)
-  let persistedPending: BookingLeadDoc
+  let claim
   try {
-    persistedPending = await payload.update({
+    claim = await claimInitialDeliveryAttempt({
+      database: payload.db.pool,
       collection: 'booking-leads',
-      id: lead.id,
-      overrideAccess: true,
-      data: pending,
+      id: leadId,
+      submissionId: leadSubmissionId,
+      attemptedAt,
     })
   } catch {
     await releaseLease(lease)
-    return operationalFailure(data.submissionId, 'delivery-pending-persist-failed')
+    return operationalFailure(data.submissionId, 'delivery-claim-failed')
   }
-  if (!hasExactPersistedTransition(persistedPending, pending)) {
-    await releaseLease(lease)
-    return operationalFailure(data.submissionId, 'delivery-pending-persist-mismatch')
+  if (claim.state === 'not-claimed') {
+    let canonical: BookingLeadDoc | undefined
+    try {
+      canonical = await findBookingBySubmissionId(payload, data.submissionId)
+    } catch {
+      await releaseLease(lease)
+      return operationalFailure(data.submissionId, 'delivery-claim-reconciliation-lookup-failed')
+    }
+    if (!canonical) {
+      await releaseLease(lease)
+      return operationalFailure(data.submissionId, 'delivery-claim-reconciliation-missing')
+    }
+    return reconcileExisting(canonical, lease, data.submissionId)
   }
+  const pending = claim.pending
 
   if (!(await renewLease(lease))) {
     await releaseLease(lease)
@@ -541,7 +550,7 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   try {
     await payload.update({
       collection: 'booking-leads',
-      id: lead.id,
+      id: leadId,
       overrideAccess: true,
       data: delivery.final,
     })

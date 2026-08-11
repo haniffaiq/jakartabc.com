@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   acquireMock,
   bookingSubjectMock,
+  claimMock,
   completeMock,
   createMock,
   findMock,
   headersMock,
   legacyRateLimitMock,
   payloadClientMock,
+  poolMock,
   rateLimitMock,
   releaseMock,
   renewMock,
@@ -19,12 +21,14 @@ const {
 } = vi.hoisted(() => ({
   acquireMock: vi.fn(),
   bookingSubjectMock: vi.fn(),
+  claimMock: vi.fn(),
   completeMock: vi.fn(),
   createMock: vi.fn(),
   findMock: vi.fn(),
   headersMock: vi.fn(),
   legacyRateLimitMock: vi.fn(),
   payloadClientMock: vi.fn(),
+  poolMock: { query: vi.fn() },
   rateLimitMock: vi.fn(),
   releaseMock: vi.fn(),
   renewMock: vi.fn(),
@@ -48,6 +52,9 @@ vi.mock('@/lib/anti-spam/idempotency', () => ({
 }))
 vi.mock('@/lib/anti-spam/rate-limit', () => ({
   rateLimiter: { rateLimit: legacyRateLimitMock },
+}))
+vi.mock('@/lib/submissions/deliveryClaim', () => ({
+  claimInitialDeliveryAttempt: claimMock,
 }))
 vi.mock('@jakartabc/email/send', () => ({ sendEmail: sendMock }))
 vi.mock('@jakartabc/email/templates/BookingLeadSales', () => ({
@@ -125,6 +132,19 @@ function renderedProps(index: number) {
   return calls[index]?.[0].props
 }
 
+function claimedPending(attemptedAt: Date) {
+  return {
+    state: 'claimed' as const,
+    pending: {
+      deliveryStatus: 'pending' as const,
+      deliveryAttempts: 1,
+      lastDeliveryAttemptAt: attemptedAt.toISOString(),
+      deliveredAt: null,
+      deliveryError: null,
+    },
+  }
+}
+
 let createdBookingRow: ReturnType<typeof bookingRow> | undefined
 
 describe('submitBooking', () => {
@@ -132,7 +152,12 @@ describe('submitBooking', () => {
     vi.resetAllMocks()
     createdBookingRow = undefined
 
-    payloadClientMock.mockResolvedValue({ create: createMock, find: findMock, update: updateMock })
+    payloadClientMock.mockResolvedValue({
+      create: createMock,
+      db: { pool: poolMock },
+      find: findMock,
+      update: updateMock,
+    })
     findMock.mockImplementation(async ({ collection }: { collection: string }) =>
       collection === 'services'
         ? { docs: [{ id: 1, slug: 'pt-pma-setup', name: 'PT PMA Setup' }] }
@@ -144,6 +169,9 @@ describe('submitBooking', () => {
     completeMock.mockResolvedValue({ state: 'completed' })
     releaseMock.mockResolvedValue({ state: 'released' })
     renewMock.mockResolvedValue({ state: 'renewed' })
+    claimMock.mockImplementation(async ({ attemptedAt }: { attemptedAt: Date }) =>
+      claimedPending(attemptedAt),
+    )
     renderMock.mockResolvedValue('<html>Email</html>')
     bookingSubjectMock.mockImplementation(
       (service: string, name: string) => `Booking: ${service} — ${name}`,
@@ -214,24 +242,15 @@ describe('submitBooking', () => {
         }),
       }),
     )
-    expect(updateMock).toHaveBeenCalledTimes(2)
-    expect(updateMock).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        collection: 'booking-leads',
-        id: 42,
-        overrideAccess: true,
-        data: expect.objectContaining({
-          deliveryStatus: 'pending',
-          deliveryAttempts: 1,
-          deliveredAt: null,
-          deliveryError: null,
-          lastDeliveryAttemptAt: expect.any(String),
-        }),
-      }),
-    )
-    expect(updateMock).toHaveBeenNthCalledWith(
-      2,
+    expect(claimMock).toHaveBeenCalledWith({
+      database: poolMock,
+      collection: 'booking-leads',
+      id: 42,
+      submissionId: SUBMISSION_ID,
+      attemptedAt: expect.any(Date),
+    })
+    expect(updateMock).toHaveBeenCalledTimes(1)
+    expect(updateMock).toHaveBeenCalledWith(
       expect.objectContaining({
         collection: 'booking-leads',
         id: 42,
@@ -244,10 +263,10 @@ describe('submitBooking', () => {
         }),
       }),
     )
-    const persistedPending = updateMock.mock.calls[0]?.[0].data
-    const persistedFinal = updateMock.mock.calls[1]?.[0].data
-    expect(persistedFinal.deliveryAttempts).toBe(persistedPending.deliveryAttempts)
-    expect(persistedFinal.lastDeliveryAttemptAt).toBe(persistedPending.lastDeliveryAttemptAt)
+    const claimInput = claimMock.mock.calls[0]?.[0] as { attemptedAt: Date }
+    const persistedFinal = updateMock.mock.calls[0]?.[0].data
+    expect(persistedFinal.deliveryAttempts).toBe(1)
+    expect(persistedFinal.lastDeliveryAttemptAt).toBe(claimInput.attemptedAt.toISOString())
     expect(sendMock).toHaveBeenCalledTimes(2)
     expect(sendMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ to: 'sales@example.co' }))
     expect(sendMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ to: 'maria@example.co' }))
@@ -275,21 +294,18 @@ describe('submitBooking', () => {
       renewMock.mock.invocationCallOrder[0] ?? Infinity,
     )
     expect(renewMock.mock.invocationCallOrder[0]).toBeLessThan(
-      updateMock.mock.invocationCallOrder[0] ?? Infinity,
+      claimMock.mock.invocationCallOrder[0] ?? Infinity,
     )
-    expect(renderMock.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(claimMock.mock.invocationCallOrder[0]).toBeLessThan(
       renewMock.mock.invocationCallOrder[1] ?? Infinity,
     )
     expect(renewMock.mock.invocationCallOrder[1]).toBeLessThan(
       sendMock.mock.invocationCallOrder[0] ?? Infinity,
     )
-    expect(updateMock.mock.invocationCallOrder[1]).toBeLessThan(
-      sendMock.mock.invocationCallOrder[1] ?? Infinity,
-    )
     expect(sendMock.mock.invocationCallOrder[0]).toBeLessThan(
-      updateMock.mock.invocationCallOrder[1] ?? Infinity,
+      updateMock.mock.invocationCallOrder[0] ?? Infinity,
     )
-    expect(updateMock.mock.invocationCallOrder[1]).toBeLessThan(
+    expect(updateMock.mock.invocationCallOrder[0]).toBeLessThan(
       sendMock.mock.invocationCallOrder[1] ?? Infinity,
     )
     expect(sendMock.mock.invocationCallOrder[1]).toBeLessThan(
@@ -400,12 +416,8 @@ describe('submitBooking', () => {
       fail()
 
       expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
-      expect(updateMock).toHaveBeenCalledTimes(1)
-      expect(updateMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ deliveryStatus: 'pending', deliveryAttempts: 1 }),
-        }),
-      )
+      expect(claimMock).toHaveBeenCalledTimes(1)
+      expect(updateMock).not.toHaveBeenCalled()
       expect(renderMock).toHaveBeenCalledTimes(1)
       expect(sendMock).not.toHaveBeenCalled()
       expect(releaseMock).toHaveBeenCalledWith(LEASE)
@@ -440,6 +452,63 @@ describe('submitBooking', () => {
     expect(completeMock).not.toHaveBeenCalledWith(LEASE)
   })
 
+  it('keeps B final sent state when stale A resumes after losing the atomic claim', async () => {
+    let durable = bookingRow('pending', 0)
+    let allowAClaim!: () => void
+    let markAAtClaim!: () => void
+    const aAtClaim = new Promise<void>((resolve) => {
+      markAAtClaim = resolve
+    })
+    const aMayResume = new Promise<void>((resolve) => {
+      allowAClaim = resolve
+    })
+
+    acquireMock
+      .mockResolvedValueOnce({ state: 'acquired', lease: LEASE })
+      .mockResolvedValueOnce({ state: 'acquired', lease: LEASE_B })
+    findMock.mockImplementation(async ({ collection }: { collection: string }) =>
+      collection === 'booking-leads'
+        ? { docs: [durable] }
+        : { docs: [{ id: 1, name: 'PT PMA Setup' }] },
+    )
+    claimMock
+      .mockImplementationOnce(async () => {
+        markAAtClaim()
+        await aMayResume
+        return { state: 'not-claimed' }
+      })
+      .mockImplementationOnce(async ({ attemptedAt }: { attemptedAt: Date }) => {
+        const result = claimedPending(attemptedAt)
+        durable = { ...durable, ...result.pending }
+        return result
+      })
+    updateMock.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      durable = { ...durable, ...data }
+      return durable
+    })
+    completeMock.mockImplementation(async (lease: { token: string }) =>
+      lease.token === LEASE_B.token ? { state: 'completed' } : { state: 'lease-lost' },
+    )
+
+    const staleA = submitBooking(fd())
+    await vi.waitFor(() => expect(claimMock).toHaveBeenCalledTimes(1))
+    await aAtClaim
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: true,
+      submissionId: SUBMISSION_ID,
+      delivery: 'sent',
+    })
+    allowAClaim()
+    expect(await staleA).toEqual({ ok: false, code: 'temporarily-unavailable' })
+
+    expect(durable).toMatchObject({ deliveryStatus: 'sent', deliveryAttempts: 1 })
+    expect(updateMock).toHaveBeenCalledTimes(1)
+    expect(sendMock.mock.calls.filter(([mail]) => mail.to === 'sales@example.co')).toHaveLength(1)
+    expect(completeMock).toHaveBeenCalledWith(LEASE_B)
+    expect(completeMock).toHaveBeenCalledWith(LEASE)
+  })
+
   it.each([
     ['render', () => renderMock.mockRejectedValueOnce(new Error('render preparation failed'))],
     [
@@ -469,7 +538,8 @@ describe('submitBooking', () => {
         submissionId: SUBMISSION_ID,
         delivery: 'sent',
       })
-      expect(updateMock).toHaveBeenCalledTimes(2)
+      expect(claimMock).toHaveBeenCalledTimes(1)
+      expect(updateMock).toHaveBeenCalledTimes(1)
       expect(sendMock.mock.calls.filter(([mail]) => mail.to === 'sales@example.co')).toHaveLength(1)
       expect(completeMock).toHaveBeenCalledTimes(1)
     },
@@ -569,17 +639,10 @@ describe('submitBooking', () => {
       delivery: 'sent',
     })
     expect(createMock).not.toHaveBeenCalled()
-    expect(updateMock).toHaveBeenCalledTimes(2)
-    expect(updateMock).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        id: 42,
-        data: expect.objectContaining({
-          deliveryStatus: 'pending',
-          deliveryAttempts: 1,
-        }),
-      }),
+    expect(claimMock).toHaveBeenCalledWith(
+      expect.objectContaining({ collection: 'booking-leads', id: 42 }),
     )
+    expect(updateMock).toHaveBeenCalledTimes(1)
     expect(sendMock.mock.calls.filter(([mail]) => mail.to === 'sales@example.co')).toHaveLength(1)
     expect(completeMock).toHaveBeenCalledWith(LEASE)
   })
@@ -647,23 +710,28 @@ describe('submitBooking', () => {
     expect(releaseMock).toHaveBeenCalledWith(LEASE)
   })
 
-  it('does not send when the pending update returns a stale transition', async () => {
-    findMock.mockResolvedValueOnce({ docs: [bookingRow('pending', 0)] })
-    updateMock.mockResolvedValueOnce({
-      ...bookingRow('pending', 1),
-      lastDeliveryAttemptAt: '2020-01-01T00:00:00.000Z',
-      deliveredAt: null,
-      deliveryError: null,
-    })
+  it('re-reads canonical state and reconciles without mail or writes when CAS is not claimed', async () => {
+    findMock
+      .mockResolvedValueOnce({ docs: [bookingRow('pending', 0)] })
+      .mockResolvedValueOnce({ docs: [bookingRow('sent', 1)] })
+    claimMock.mockResolvedValueOnce({ state: 'not-claimed' })
 
     expect(await submitBooking(fd())).toEqual({
-      ok: false,
-      code: 'temporarily-unavailable',
+      ok: true,
+      submissionId: SUBMISSION_ID,
+      delivery: 'sent',
     })
-    expect(updateMock).toHaveBeenCalledTimes(1)
+    expect(findMock).toHaveBeenNthCalledWith(2, {
+      collection: 'booking-leads',
+      where: { submissionId: { equals: SUBMISSION_ID } },
+      limit: 1,
+      overrideAccess: true,
+      depth: 1,
+      locale: 'all',
+    })
+    expect(updateMock).not.toHaveBeenCalled()
     expect(sendMock).not.toHaveBeenCalled()
-    expect(releaseMock).toHaveBeenCalledWith(LEASE)
-    expect(completeMock).not.toHaveBeenCalled()
+    expect(completeMock).toHaveBeenCalledWith(LEASE)
   })
 
   it('hydrates a stranded retry only from persisted row A when FormData B reuses its UUID', async () => {
@@ -672,7 +740,7 @@ describe('submitBooking', () => {
       .mockResolvedValueOnce({ docs: [] })
       .mockResolvedValueOnce(serviceA)
       .mockResolvedValueOnce({ docs: [bookingRow('pending', 0)] })
-    updateMock.mockRejectedValueOnce(new Error('database unavailable before owner send'))
+    claimMock.mockRejectedValueOnce(new Error('database unavailable before owner send'))
 
     const changed = new Map(goodData)
     changed.set('name', 'Mallory B')
@@ -785,6 +853,24 @@ describe('submitBooking', () => {
     expect(releaseMock).toHaveBeenCalledWith(LEASE)
   })
 
+  it.each([
+    ['non-numeric ID', { id: '42' }],
+    ['mismatched submission ID', { submissionId: '22222222-2222-4222-8222-222222222222' }],
+  ])('fails closed before CAS for a persisted row with %s', async (_case, identity) => {
+    findMock.mockResolvedValueOnce({
+      docs: [{ ...bookingRow('pending', 0), ...identity }],
+    })
+
+    expect(await submitBooking(fd())).toEqual({
+      ok: false,
+      code: 'temporarily-unavailable',
+    })
+    expect(claimMock).not.toHaveBeenCalled()
+    expect(renderMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(releaseMock).toHaveBeenCalledWith(LEASE)
+  })
+
   it('hydrates canonical nullable optional fields without falling back to FormData', async () => {
     findMock.mockResolvedValueOnce({
       docs: [
@@ -875,8 +961,8 @@ describe('submitBooking', () => {
   it.each([
     ['create', () => createMock.mockRejectedValueOnce(new Error('db secret'))],
     [
-      'pending update',
-      () => updateMock.mockRejectedValueOnce(new Error('db secret before provider send')),
+      'atomic claim',
+      () => claimMock.mockRejectedValueOnce(new Error('db secret before provider send')),
     ],
   ])('releases the lease and fails closed when %s fails before owner send', async (_case, fail) => {
     fail()
@@ -888,12 +974,7 @@ describe('submitBooking', () => {
   })
 
   it('does not report success when the final delivery update fails', async () => {
-    updateMock
-      .mockImplementationOnce(async ({ data }: { data: Record<string, unknown> }) => ({
-        ...bookingRow('pending', 1),
-        ...data,
-      }))
-      .mockRejectedValueOnce(new Error('db final-update secret'))
+    updateMock.mockRejectedValueOnce(new Error('db final-update secret'))
 
     expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
     expect(sendMock).toHaveBeenCalledTimes(1)
@@ -905,7 +986,7 @@ describe('submitBooking', () => {
     completeMock.mockRejectedValueOnce(new Error('redis credential'))
 
     expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
-    expect(updateMock).toHaveBeenCalledTimes(2)
+    expect(updateMock).toHaveBeenCalledTimes(1)
     expect(sendMock).toHaveBeenCalledTimes(2)
   })
 
