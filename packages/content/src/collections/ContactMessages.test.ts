@@ -53,4 +53,45 @@ describe('ContactMessages collection', () => {
       options: ['new', 'contacted', 'converted', 'dropped'],
     })
   })
+
+  it('defines nullable unique submission identity and durable delivery state', () => {
+    const fields = ContactMessages.fields as {
+      name?: string
+      required?: boolean
+      unique?: boolean
+      index?: boolean
+      defaultValue?: unknown
+      min?: number
+      maxLength?: number
+      options?: unknown[]
+      admin?: { readOnly?: boolean }
+    }[]
+    const byName = Object.fromEntries(fields.map((field) => [field.name, field]))
+
+    expect(byName.submissionId).toMatchObject({
+      unique: true,
+      index: true,
+      admin: { readOnly: true },
+    })
+    expect(byName.submissionId?.required).not.toBe(true)
+    expect(byName.deliveryStatus).toMatchObject({
+      required: true,
+      index: true,
+      defaultValue: 'pending',
+      options: ['pending', 'sent', 'failed'],
+      admin: { readOnly: true },
+    })
+    expect(byName.deliveryAttempts).toMatchObject({
+      required: true,
+      defaultValue: 0,
+      min: 0,
+      admin: { readOnly: true },
+    })
+    expect(byName.lastDeliveryAttemptAt?.required).not.toBe(true)
+    expect(byName.deliveredAt?.required).not.toBe(true)
+    expect(byName.deliveryError).toMatchObject({
+      maxLength: 500,
+      admin: { readOnly: true },
+    })
+  })
 })
