@@ -199,6 +199,15 @@ async function completeLease(lease: SubmissionLease) {
   }
 }
 
+async function renewLease(lease: SubmissionLease) {
+  try {
+    const result = await submissionCoordinator.renew(lease)
+    return result.state === 'renewed'
+  } catch {
+    return false
+  }
+}
+
 async function findBookingBySubmissionId(
   payload: PayloadBookingClient,
   submissionId: string,
@@ -214,7 +223,7 @@ async function findBookingBySubmissionId(
   return result.docs[0] as BookingLeadDoc | undefined
 }
 
-function ownerMail({
+async function prepareOwnerMail({
   data,
   leadId,
   salesEmail,
@@ -227,43 +236,41 @@ function ownerMail({
   serviceName: string
   siteUrl: string
 }) {
-  return async () => {
-    const salesHtml = await render(
-      React.createElement(BookingLeadSales, {
-        leadId,
-        name: data.name,
-        email: data.email,
-        company: data.company,
-        phone: data.phone,
-        service: serviceName,
-        preferredWindows: data.preferredWindows,
-        message: data.message,
-        locale: data.locale,
-        siteUrl,
-      }),
-    )
-    const adminUrl = `${siteUrl}/admin/collections/booking-leads/${leadId}`
-    const salesText = [
-      `Name: ${data.name}`,
-      `Email: ${data.email}`,
-      data.company ? `Company: ${data.company}` : undefined,
-      data.phone ? `Phone: ${data.phone}` : undefined,
-      `Service: ${serviceName}`,
-      `Preferred windows: ${data.preferredWindows.join(', ') || 'No preference'}`,
-      '',
-      data.message,
-      '',
-      adminUrl,
-    ]
-      .filter((line): line is string => typeof line === 'string')
-      .join('\n')
+  const salesHtml = await render(
+    React.createElement(BookingLeadSales, {
+      leadId,
+      name: data.name,
+      email: data.email,
+      company: data.company,
+      phone: data.phone,
+      service: serviceName,
+      preferredWindows: data.preferredWindows,
+      message: data.message,
+      locale: data.locale,
+      siteUrl,
+    }),
+  )
+  const adminUrl = `${siteUrl}/admin/collections/booking-leads/${leadId}`
+  const salesText = [
+    `Name: ${data.name}`,
+    `Email: ${data.email}`,
+    data.company ? `Company: ${data.company}` : undefined,
+    data.phone ? `Phone: ${data.phone}` : undefined,
+    `Service: ${serviceName}`,
+    `Preferred windows: ${data.preferredWindows.join(', ') || 'No preference'}`,
+    '',
+    data.message,
+    '',
+    adminUrl,
+  ]
+    .filter((line): line is string => typeof line === 'string')
+    .join('\n')
 
-    return sendEmail({
-      to: salesEmail,
-      subject: subjects.bookingLeadSales(serviceName, data.name),
-      html: salesHtml,
-      text: salesText,
-    })
+  return {
+    to: salesEmail,
+    subject: subjects.bookingLeadSales(serviceName, data.name),
+    html: salesHtml,
+    text: salesText,
   }
 }
 
@@ -475,6 +482,11 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
     return operationalFailure(data.submissionId, 'persisted-booking-hydration-failed')
   }
 
+  if (!(await renewLease(lease))) {
+    await releaseLease(lease)
+    return operationalFailure(data.submissionId, 'delivery-claim-renew-failed')
+  }
+
   const attemptedAt = new Date()
   const pending = beginDeliveryAttempt(0, attemptedAt)
   let persistedPending: BookingLeadDoc
@@ -495,16 +507,29 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
   }
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'
-  let clockCalls = 0
-  const delivery = await attemptDelivery({
-    currentAttempts: 0,
-    send: ownerMail({
+  let preparedOwnerMail: Awaited<ReturnType<typeof prepareOwnerMail>>
+  try {
+    preparedOwnerMail = await prepareOwnerMail({
       data: persistedMail.data,
       leadId: lead.id,
       salesEmail,
       serviceName: persistedMail.serviceName,
       siteUrl,
-    }),
+    })
+  } catch {
+    await releaseLease(lease)
+    return operationalFailure(data.submissionId, 'owner-mail-prepare-failed')
+  }
+
+  if (!(await renewLease(lease))) {
+    await releaseLease(lease)
+    return operationalFailure(data.submissionId, 'owner-send-renew-failed')
+  }
+
+  let clockCalls = 0
+  const delivery = await attemptDelivery({
+    currentAttempts: 0,
+    send: () => sendEmail(preparedOwnerMail),
     clock: () => (clockCalls++ === 0 ? attemptedAt : new Date()),
   })
 

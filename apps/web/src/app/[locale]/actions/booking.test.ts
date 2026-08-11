@@ -11,6 +11,7 @@ const {
   payloadClientMock,
   rateLimitMock,
   releaseMock,
+  renewMock,
   renderMock,
   sendMock,
   updateMock,
@@ -26,6 +27,7 @@ const {
   payloadClientMock: vi.fn(),
   rateLimitMock: vi.fn(),
   releaseMock: vi.fn(),
+  renewMock: vi.fn(),
   renderMock: vi.fn(async () => '<html>Email</html>'),
   sendMock: vi.fn(),
   updateMock: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('@/lib/anti-spam/idempotency', () => ({
     complete: completeMock,
     rateLimit: rateLimitMock,
     release: releaseMock,
+    renew: renewMock,
   },
 }))
 vi.mock('@/lib/anti-spam/rate-limit', () => ({
@@ -70,6 +73,7 @@ import { submitBooking } from './booking'
 
 const SUBMISSION_ID = '11111111-1111-4111-8111-111111111111'
 const LEASE = Object.freeze({ submissionId: SUBMISSION_ID, token: 'lease-token' })
+const LEASE_B = Object.freeze({ submissionId: SUBMISSION_ID, token: 'lease-token-b' })
 const trustedProxySecret = 'proxy-secret-value-that-is-at-least-32-characters'
 
 const goodData = new Map<string, string>([
@@ -139,6 +143,7 @@ describe('submitBooking', () => {
     acquireMock.mockResolvedValue({ state: 'acquired', lease: LEASE })
     completeMock.mockResolvedValue({ state: 'completed' })
     releaseMock.mockResolvedValue({ state: 'released' })
+    renewMock.mockResolvedValue({ state: 'renewed' })
     renderMock.mockResolvedValue('<html>Email</html>')
     bookingSubjectMock.mockImplementation(
       (service: string, name: string) => `Booking: ${service} — ${name}`,
@@ -261,6 +266,17 @@ describe('submitBooking', () => {
       }),
     )
     expect(completeMock).toHaveBeenCalledWith(LEASE)
+    expect(renewMock).toHaveBeenNthCalledWith(1, LEASE)
+    expect(renewMock).toHaveBeenNthCalledWith(2, LEASE)
+    expect(renewMock.mock.invocationCallOrder[0]).toBeLessThan(
+      updateMock.mock.invocationCallOrder[0] ?? Infinity,
+    )
+    expect(renderMock.mock.invocationCallOrder[0]).toBeLessThan(
+      renewMock.mock.invocationCallOrder[1] ?? Infinity,
+    )
+    expect(renewMock.mock.invocationCallOrder[1]).toBeLessThan(
+      sendMock.mock.invocationCallOrder[0] ?? Infinity,
+    )
     expect(updateMock.mock.invocationCallOrder[1]).toBeLessThan(
       sendMock.mock.invocationCallOrder[1] ?? Infinity,
     )
@@ -352,6 +368,69 @@ describe('submitBooking', () => {
     expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
     expect(releaseMock).toHaveBeenCalledWith(LEASE)
     expect(sendMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['lost', () => renewMock.mockResolvedValueOnce({ state: 'lease-lost' })],
+    ['unavailable', () => renewMock.mockRejectedValueOnce(new Error('redis credential'))],
+  ])('fails closed before claiming pending when the lease is %s', async (_case, failRenewal) => {
+    failRenewal()
+
+    expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(renderMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(releaseMock).toHaveBeenCalledWith(LEASE)
+  })
+
+  it.each([
+    ['lost', () => renewMock.mockResolvedValueOnce({ state: 'lease-lost' })],
+    ['unavailable', () => renewMock.mockRejectedValueOnce(new Error('redis credential'))],
+  ])(
+    'leaves pending ambiguous without mail when the pre-send renewal is %s',
+    async (_case, fail) => {
+      renewMock.mockResolvedValueOnce({ state: 'renewed' })
+      fail()
+
+      expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
+      expect(updateMock).toHaveBeenCalledTimes(1)
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ deliveryStatus: 'pending', deliveryAttempts: 1 }),
+        }),
+      )
+      expect(renderMock).toHaveBeenCalledTimes(1)
+      expect(sendMock).not.toHaveBeenCalled()
+      expect(releaseMock).toHaveBeenCalledWith(LEASE)
+      expect(completeMock).not.toHaveBeenCalled()
+    },
+  )
+
+  it('lets new lease B send once after stale lease A loses ownership before pending claim', async () => {
+    const durable = bookingRow('pending', 0)
+    acquireMock
+      .mockResolvedValueOnce({ state: 'acquired', lease: LEASE })
+      .mockResolvedValueOnce({ state: 'acquired', lease: LEASE_B })
+    renewMock.mockImplementation(async (lease: { token: string }) =>
+      lease.token === LEASE.token ? { state: 'lease-lost' } : { state: 'renewed' },
+    )
+    findMock.mockImplementation(async ({ collection }: { collection: string }) =>
+      collection === 'booking-leads'
+        ? { docs: [durable] }
+        : { docs: [{ id: 1, name: 'PT PMA Setup' }] },
+    )
+
+    expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
+    expect(await submitBooking(fd())).toEqual({
+      ok: true,
+      submissionId: SUBMISSION_ID,
+      delivery: 'sent',
+    })
+    expect(sendMock.mock.calls.filter(([mail]) => mail.to === 'sales@example.co')).toHaveLength(1)
+    expect(renewMock.mock.calls.filter(([lease]) => lease.token === LEASE.token)).toHaveLength(1)
+    expect(renewMock.mock.calls.filter(([lease]) => lease.token === LEASE_B.token)).toHaveLength(2)
+    expect(completeMock).toHaveBeenCalledWith(LEASE_B)
+    expect(completeMock).not.toHaveBeenCalledWith(LEASE)
   })
 
   it('returns accepted pending without persistence or mail for a concurrent in-progress request', async () => {
