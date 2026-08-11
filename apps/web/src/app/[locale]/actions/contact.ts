@@ -94,7 +94,13 @@ function logEvent(level: 'error' | 'warn', event: string, submissionId?: string)
 }
 
 function isUntouchedPending(document: ContactDocument) {
-  return document.deliveryStatus === 'pending' && document.deliveryAttempts === 0
+  return (
+    document.deliveryStatus === 'pending' &&
+    document.deliveryAttempts === 0 &&
+    document.lastDeliveryAttemptAt === null &&
+    document.deliveredAt === null &&
+    document.deliveryError === null
+  )
 }
 
 function samePendingTransition(

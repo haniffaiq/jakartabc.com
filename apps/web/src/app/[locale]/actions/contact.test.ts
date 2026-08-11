@@ -103,6 +103,13 @@ const persistedContactFields = {
   message: validContact.message,
   locale: validContact.locale,
 }
+const untouchedDeliveryFields = {
+  deliveryStatus: 'pending' as const,
+  deliveryAttempts: 0,
+  lastDeliveryAttemptAt: null,
+  deliveredAt: null,
+  deliveryError: null,
+}
 const persistedAttemptedAt = '2026-08-10T10:00:00.000Z'
 const persistedDeliveredAt = '2026-08-10T10:00:01.000Z'
 
@@ -202,8 +209,7 @@ describe('submitContact', () => {
         ...data,
         id: 7,
         submissionId: id,
-        deliveryStatus: 'pending',
-        deliveryAttempts: 0,
+        ...untouchedDeliveryFields,
       }
       rows.set(id, row)
       return row
@@ -447,8 +453,7 @@ describe('submitContact', () => {
     rows.set(submissionId, {
       id: 23,
       submissionId,
-      deliveryStatus: 'pending',
-      deliveryAttempts: 0,
+      ...untouchedDeliveryFields,
       ...persistedContactFields,
     })
 
@@ -465,6 +470,27 @@ describe('submitContact', () => {
       mocks.sendEmail.mock.calls.filter(([message]) => message.to === 'sales@example.com'),
     ).toHaveLength(1)
     expect(mocks.complete).toHaveBeenCalledWith(lease)
+  })
+
+  it.each([
+    ['lastDeliveryAttemptAt', persistedAttemptedAt],
+    ['deliveredAt', persistedDeliveredAt],
+    ['deliveryError', 'delivery.provider-send-failed|TimeoutError'],
+  ] as const)('fails closed before CAS when pending/0 has non-null %s', async (field, value) => {
+    rows.set(submissionId, {
+      id: 29,
+      submissionId,
+      ...untouchedDeliveryFields,
+      ...persistedContactFields,
+      [field]: value,
+    })
+
+    expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
+    expect(mocks.claimQuery).not.toHaveBeenCalled()
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.complete).not.toHaveBeenCalled()
+    expect(mocks.release).toHaveBeenCalledWith(lease)
   })
 
   it('uses only the persisted contact when a different retry resumes delivery', async () => {
@@ -555,8 +581,7 @@ describe('submitContact', () => {
     rows.set(submissionId, {
       id: 27,
       submissionId,
-      deliveryStatus: 'pending',
-      deliveryAttempts: 0,
+      ...untouchedDeliveryFields,
       ...persistedFields,
     })
 
@@ -571,8 +596,7 @@ describe('submitContact', () => {
     rows.set(submissionId, {
       id: 28,
       submissionId,
-      deliveryStatus: 'pending',
-      deliveryAttempts: 0,
+      ...untouchedDeliveryFields,
       ...persistedContactFields,
       company: null,
     })
@@ -615,8 +639,7 @@ describe('submitContact', () => {
     rows.set(submissionId, {
       id: 25,
       submissionId,
-      deliveryStatus: 'pending',
-      deliveryAttempts: 0,
+      ...untouchedDeliveryFields,
       ...persistedContactFields,
     })
 
@@ -706,8 +729,7 @@ describe('submitContact', () => {
         ...data,
         id: 26,
         submissionId,
-        deliveryStatus: 'pending',
-        deliveryAttempts: 0,
+        ...untouchedDeliveryFields,
       })
       throw new Error('duplicate key with private database details')
     })
@@ -848,8 +870,7 @@ describe('submitContact', () => {
     rows.set(submissionId, {
       id: 32,
       submissionId,
-      deliveryStatus: 'pending',
-      deliveryAttempts: 0,
+      ...untouchedDeliveryFields,
     })
 
     expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
