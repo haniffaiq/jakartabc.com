@@ -20,8 +20,51 @@ describe('BookingLeads collection', () => {
         'locale',
         'status',
         'notes',
+        'submissionId',
+        'deliveryStatus',
+        'deliveryAttempts',
+        'lastDeliveryAttemptAt',
+        'deliveredAt',
+        'deliveryError',
       ]),
     )
+  })
+
+  it('defines nullable unique submission identity and durable delivery state', () => {
+    const fields = Object.fromEntries(
+      (
+        BookingLeads.fields as Array<{
+          name?: string
+          type?: string
+          required?: boolean
+          unique?: boolean
+          index?: boolean
+          defaultValue?: unknown
+          maxLength?: number
+        }>
+      ).map((field) => [field.name, field]),
+    )
+
+    expect(fields.submissionId).toMatchObject({
+      type: 'text',
+      unique: true,
+      index: true,
+    })
+    expect(fields.submissionId?.required).not.toBe(true)
+    expect(fields.deliveryStatus).toMatchObject({
+      type: 'select',
+      required: true,
+      index: true,
+      defaultValue: 'pending',
+    })
+    expect(fields.deliveryAttempts).toMatchObject({
+      type: 'number',
+      required: true,
+      defaultValue: 0,
+    })
+    expect(fields.lastDeliveryAttemptAt).toMatchObject({ type: 'date' })
+    expect(fields.deliveredAt).toMatchObject({ type: 'date' })
+    expect(fields.deliveryError).toMatchObject({ type: 'textarea', maxLength: 500 })
   })
 
   it('surfaces sales-friendly columns and searchable lead identifiers in admin', () => {
