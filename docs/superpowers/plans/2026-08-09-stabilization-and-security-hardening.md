@@ -120,6 +120,7 @@ Do not rename these public types in downstream tasks without updating this plan 
 - `apps/web/src/lib/request/client-ip.ts` — trusted-proxy client identity extraction.
 - `apps/web/src/lib/url/safe-url.ts` — safe rendered URL and portal redirect canonicalization.
 - `apps/web/src/lib/submissions/delivery.ts` — shared delivery transitions and retry behavior.
+- `apps/web/src/lib/submissions/deliveryClaim.ts` — fixed-statement PostgreSQL CAS for delivery ownership.
 - `apps/web/src/lib/siteChrome.ts` — cached localized CMS global reads.
 - `apps/web/src/scripts/retry-failed-deliveries.ts` — idempotent operational retry command.
 - `apps/web/src/migrations/20260809_000000_stabilization.ts` — additive compatibility migration.
@@ -1030,7 +1031,9 @@ git commit -m "fix: make mobile navigation keyboard complete"
 
 **Shared prerequisite:** Import the already-landed delivery field factory from
 `packages/content/src/fields/submissionDelivery.ts` and delivery transitions from
-`apps/web/src/lib/submissions/delivery.ts`. Do not recreate or fork these helpers in this lane.
+`apps/web/src/lib/submissions/delivery.ts`. Import the fixed-statement initial-delivery CAS from
+`apps/web/src/lib/submissions/deliveryClaim.ts`; never replace it with a Payload find-then-update.
+Do not recreate or fork these helpers in this lane.
 
 **Files:**
 
@@ -1080,7 +1083,17 @@ delivery fields but secrets/tokens are never stored.
 
 - [ ] **Step 5: Implement the ordered transaction flow**
 
-Validate, honeypot, trusted IP, Turnstile, Redis limit, acquire ID, create/find by unique submission ID with `overrideAccess: true`, attempt sales mail, update delivery status/attempt count, attempt visitor mail, mark Redis complete, return accepted. On pre-persistence Redis failure, return `temporarily-unavailable` with the UI fallback email. On an exception after lock acquisition but before persistence, release the lock.
+Validate, honeypot, trusted IP, Turnstile, Redis limit, acquire ID, and create/find by unique
+submission ID with `overrideAccess: true`. Hydrate only the persisted delivery source and finish
+the pure owner-mail render/preparation before the first renewal. Then renew the Redis lease, claim
+the untouched `pending`/attempt-zero row with the shared single-statement PostgreSQL CAS, renew
+again immediately before the provider call, send, and persist the final delivery state. A CAS
+no-match must re-read and reconcile the durable row with zero send; malformed state/read failure
+fails closed. A stale worker must never use a Payload update-by-ID to write the pending transition.
+Attempt visitor mail best-effort, mark Redis complete, and return accepted. On pre-persistence Redis
+failure, return `temporarily-unavailable` with the UI fallback email. On an exception after lock
+acquisition but before persistence, release the lock. A durable `deliveryAttempts >= 1` is never
+automatically resent.
 
 - [ ] **Step 6: Sanitize delivery errors**
 
@@ -1104,7 +1117,8 @@ git commit -m "fix: make contact acceptance idempotent"
 **Parallel ownership:** Wave 3, Worker B. Own only booking collection/action/tests.
 
 **Shared prerequisite:** Reuse the same already-landed field factory and web delivery helpers as
-Task 11. Do not edit those shared files from this parallel lane.
+Task 11, including the fixed-statement initial-delivery PostgreSQL CAS. Do not edit those shared
+files from this parallel lane.
 
 **Files:**
 
@@ -1131,8 +1145,11 @@ Expected: FAIL for direct create access, fields, duplicate prevention, and mail 
 
 Use scope `booking`, the shared async coordinator, trusted client IP, explicit Local API
 `overrideAccess: true`, unique submission lookup, a fresh `createSubmissionDeliveryFields()` result,
-and the shared delivery transitions. Do not duplicate Redis, error-redaction, field, or
-email-transition helpers inside the action; import the shared interfaces locked above.
+and the shared delivery transitions. Prepare the owner message before the first renewal; then use
+renew -> initial CAS -> exact claimed-result validation -> renew immediately before provider send.
+A CAS no-match re-reads/reconciles with zero send, and an attempt count of at least one remains
+ambiguous/non-retryable. Do not duplicate Redis, SQL/CAS, error-redaction, field, or email-transition
+helpers inside the action; import the shared interfaces locked above.
 
 - [ ] **Step 5: Verify and commit**
 
@@ -1210,6 +1227,8 @@ git commit -m "fix: preserve Insight cache and error semantics"
 
 - Modify/extend: `apps/web/src/lib/submissions/delivery.ts`
 - Modify/extend: `apps/web/src/lib/submissions/delivery.test.ts`
+- Modify/extend: `apps/web/src/lib/submissions/deliveryClaim.ts`
+- Modify/extend: `apps/web/src/lib/submissions/deliveryClaim.test.ts`
 - Create: `apps/web/src/scripts/retry-failed-deliveries.ts`
 - Create: `apps/web/src/scripts/retry-failed-deliveries.test.ts`
 - Modify: `apps/web/package.json`
@@ -1242,7 +1261,12 @@ Expected: FAIL because the retry command and conditional claim behavior do not e
 
 - [ ] **Step 3: Implement conditional claim and retry command**
 
-Claim only a row matching `id` and `deliveryStatus = failed`, transition to pending, increment attempts, send, then set sent/failed. The script accepts `--collection contact-messages|booking-leads`, `--limit 100`, and `--dry-run`; it requires authenticated operational execution and logs IDs/status only.
+Extend the shared fixed-statement claim module for retry ownership. Claim only a row matching `id`,
+the expected attempt count, and `deliveryStatus = failed`; transition to pending, increment attempts,
+send, then set sent/failed. Keep collection/table identifiers selected from a closed allowlist and
+all row values parameterized. The script accepts `--collection contact-messages|booking-leads`,
+`--limit 100`, and `--dry-run`; it requires authenticated operational execution and logs IDs/status
+only.
 
 Do not automatically claim stale `pending` rows. A crash after the provider accepted a message but
 before the final database update leaves an ambiguous outcome; relabeling it `failed` or retrying it
@@ -1264,6 +1288,8 @@ Rename the generated timestamp consistently to `20260809_000000_stabilization` o
 The up migration must:
 
 1. add nullable unique/indexed `submission_id` fields and delivery fields for both lead tables;
+   backfill every legacy lead to `delivery_status = pending` and `delivery_attempts = 0` before
+   enforcing non-null/default constraints required by the runtime CAS;
 2. add/check delivery-status enum or constraint with pending/sent/failed;
 3. backfill Insight native `_status` and version `version__status` from old custom status values;
 4. preserve old custom status columns and legacy media data;
@@ -1274,6 +1300,10 @@ The up migration must:
 7. create the generated Payload Jobs Queue tables, enums, foreign keys, and
    indexes required by the registered `revalidate-cache` task; runtime schema
    push remains disabled.
+
+The committed runtime remains gated behind the migration init container. Do not start a web or
+portal process containing the CAS call sites until both lead tables have the new snake-case delivery
+columns; a missing-column error is fail-closed, not a signal to fall back to Payload update-by-ID.
 
 The down migration removes only the new additive fields/constraints and restores native status from retained custom columns. It never deletes MinIO or local media.
 
@@ -1305,6 +1335,12 @@ silently transforming them. Repeat the slug assertion after migration. Also
 enqueue one revalidation job inside a rolled-back transaction and assert it is
 absent, then enqueue/commit another job, assert it becomes visible, run the
 dedicated worker, and assert successful completion removes it.
+
+After migrate-up, create one untouched pending/attempt-zero row for each lead table and race two
+initial CAS calls against it. Assert exactly one returns `claimed`, the other returns `not-claimed`,
+the row is pending/attempt-one, `updated_at` advances, and a simulated stale claimant cannot regress
+a subsequently sent row back to pending. Repeat after down/up to prove the runtime cannot precede
+the schema and both fixed table statements match the generated migration.
 
 - [ ] **Step 9: Verify and commit the artifact barrier**
 
