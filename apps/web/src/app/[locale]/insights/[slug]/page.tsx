@@ -9,6 +9,7 @@ import { LocalizedLink } from '@/components/LocalizedLink'
 import { routing, type Locale } from '@/i18n/routing'
 import {
   buildInsightCacheKey,
+  buildInsightCacheTags,
   formatInsightDate,
   hasRegulations,
   type InsightLocale,
@@ -74,20 +75,20 @@ const findPublishedInsights = async (locale: InsightLocale, limit = 200) => {
 
   return payload.find({
     collection: 'insights' as never,
-    where: { status: { equals: 'published' } },
+    where: { _status: { equals: 'published' } },
     locale,
     depth: 2,
     limit,
   }) as unknown as Promise<{ docs: InsightDocument[] }>
 }
 
-const getInsightBySlug = (slug: string, locale: InsightLocale) =>
+export const getInsightBySlug = (slug: string, locale: InsightLocale) =>
   cache(
     async () => {
       const payload = await getPayloadClient()
       const res = (await payload.find({
         collection: 'insights' as never,
-        where: { slug: { equals: slug }, status: { equals: 'published' } },
+        where: { slug: { equals: slug }, _status: { equals: 'published' } },
         locale,
         depth: 2,
         limit: 1,
@@ -96,7 +97,7 @@ const getInsightBySlug = (slug: string, locale: InsightLocale) =>
       return res.docs[0] ?? null
     },
     buildInsightCacheKey(slug, locale),
-    { tags: [`insights:slug:${slug}`] },
+    { tags: buildInsightCacheTags(locale, slug) },
   )()
 
 export async function generateStaticParams() {
@@ -104,15 +105,11 @@ export async function generateStaticParams() {
     return []
   }
 
-  try {
-    const res = await findPublishedInsights('en')
+  const res = await findPublishedInsights('en')
 
-    return routing.locales.flatMap((locale) =>
-      res.docs.map((insight) => ({ locale, slug: insight.slug })),
-    )
-  } catch {
-    return []
-  }
+  return routing.locales.flatMap((locale) =>
+    res.docs.map((insight) => ({ locale, slug: insight.slug })),
+  )
 }
 
 export default async function InsightDetailPage({
@@ -127,7 +124,7 @@ export default async function InsightDetailPage({
   setRequestLocale(typedLocale)
 
   const t = await getTranslations('insightDetail')
-  const insight = await getInsightBySlug(slug, typedLocale).catch(() => null)
+  const insight = await getInsightBySlug(slug, typedLocale)
   if (!insight) notFound()
 
   const category = isPopulated(insight.category) ? insight.category : null

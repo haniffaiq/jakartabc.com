@@ -1,3 +1,5 @@
+import { insightTags } from '@jakartabc/content/cache/tags'
+
 export type InsightLocale = 'en' | 'id'
 
 export type RegulationCitation = {
@@ -9,6 +11,10 @@ export type RegulationCitation = {
 
 export function buildInsightCacheKey(slug: string, locale: InsightLocale) {
   return ['insight', locale, slug]
+}
+
+export function buildInsightCacheTags(locale: InsightLocale, slug?: string) {
+  return insightTags({ slug, locales: [locale] })
 }
 
 export function formatInsightDate(date: string, locale: InsightLocale) {

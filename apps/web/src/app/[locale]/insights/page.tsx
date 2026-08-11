@@ -5,6 +5,7 @@ import { getTranslations, setRequestLocale } from 'next-intl/server'
 
 import { LocalizedLink } from '@/components/LocalizedLink'
 import { type Locale, routing } from '@/i18n/routing'
+import { buildInsightCacheTags } from '@/lib/insightDetail'
 import { getPayloadClient } from '@/lib/payload'
 
 export const dynamic = 'force-dynamic'
@@ -26,43 +27,29 @@ type PayloadInsight = {
 type PayloadFind = (args: {
   collection: 'insights'
   sort: string
-  where: { status: { equals: 'published' } }
+  where: { _status: { equals: 'published' } }
   locale: Locale
   depth: number
   limit: number
 }) => Promise<{ docs: PayloadInsight[] }>
 
-function isRecoverableInsightsUnavailable(error: unknown) {
-  return (
-    error instanceof Error &&
-    /collection.*insights|insights.*collection|cannot connect to Postgres|ECONNREFUSED/i.test(
-      error.message,
-    )
-  )
-}
-
 export const getInsights = (locale: Locale) =>
   cache(
     async () => {
-      try {
-        const payload = await getPayloadClient()
-        const res = await (payload.find as PayloadFind)({
-          collection: 'insights',
-          sort: '-publishedAt',
-          where: { status: { equals: 'published' } },
-          locale,
-          depth: 1,
-          limit: 50,
-        })
+      const payload = await getPayloadClient()
+      const res = await (payload.find as PayloadFind)({
+        collection: 'insights',
+        sort: '-publishedAt',
+        where: { _status: { equals: 'published' } },
+        locale,
+        depth: 1,
+        limit: 50,
+      })
 
-        return res.docs
-      } catch (error) {
-        if (isRecoverableInsightsUnavailable(error)) return []
-        throw error
-      }
+      return res.docs
     },
     [`insights-list-${locale}`],
-    { tags: ['insights:list'] },
+    { tags: buildInsightCacheTags(locale) },
   )()
 
 function getCategoryName(category: PayloadInsight['category']) {
