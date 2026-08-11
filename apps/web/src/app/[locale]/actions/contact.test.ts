@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   find: vi.fn(),
   headersGet: vi.fn(),
+  renderEmail: vi.fn(),
   renew: vi.fn(),
   release: vi.fn(),
   sendEmail: vi.fn(),
@@ -36,6 +37,10 @@ vi.mock('@/lib/payload', () => ({
 
 vi.mock('next/headers', () => ({
   headers: vi.fn(async () => ({ get: mocks.headersGet })),
+}))
+
+vi.mock('@react-email/components', () => ({
+  render: mocks.renderEmail,
 }))
 
 vi.mock('@jakartabc/email', () => ({
@@ -119,6 +124,7 @@ describe('submitContact', () => {
     for (const mock of Object.values(mocks)) mock.mockReset()
 
     mocks.verifyTurnstile.mockResolvedValue(true)
+    mocks.renderEmail.mockResolvedValue('<html>prepared email</html>')
     mocks.rateLimit.mockResolvedValue({ allowed: true, remaining: 4 })
     mocks.headersGet.mockImplementation((name: string) => {
       if (name.toLowerCase() === 'x-jbc-proxy-secret') return trustedProxySecret
@@ -725,6 +731,39 @@ describe('submitContact', () => {
     expect(mocks.sendEmail).not.toHaveBeenCalled()
     expect(mocks.complete).not.toHaveBeenCalled()
     expect(mocks.release).toHaveBeenCalledWith(lease)
+  })
+
+  it('keeps attempts untouched when owner email preparation fails and retries once', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    mocks.renderEmail.mockRejectedValueOnce(
+      new Error('render contained private@example.com and customer content'),
+    )
+
+    expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
+    expect(rows.get(submissionId)).toMatchObject({
+      deliveryStatus: 'pending',
+      deliveryAttempts: 0,
+    })
+    expect(mocks.renew).not.toHaveBeenCalled()
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.release).toHaveBeenCalledWith(lease)
+
+    expect(await submitContact(fd(validContact))).toEqual({
+      ok: true,
+      submissionId,
+      delivery: 'sent',
+    })
+    expect(rows.get(submissionId)).toMatchObject({
+      deliveryStatus: 'sent',
+      deliveryAttempts: 1,
+    })
+    expect(mocks.sendEmail).toHaveBeenCalledTimes(2)
+    expect(
+      mocks.sendEmail.mock.calls.filter(([message]) => message.to === 'sales@example.com'),
+    ).toHaveLength(1)
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain('private@example.com')
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain('customer content')
   })
 
   it.each([

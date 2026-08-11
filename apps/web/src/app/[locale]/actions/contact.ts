@@ -350,6 +350,31 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
   const company = optionalCompany(deliveryData.company)
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://jakartabc.com'
+  let preparedOwnerMail: Parameters<typeof sendEmail>[0]
+  try {
+    const salesHtml = await render(
+      React.createElement(ContactSales, {
+        messageId: document.id,
+        name: deliveryData.name,
+        email: deliveryData.email,
+        company,
+        message: deliveryData.message,
+        locale: deliveryData.locale,
+        siteUrl,
+      }),
+    )
+    preparedOwnerMail = {
+      to: salesEmail,
+      subject: subjects.contactSales(deliveryData.name),
+      html: salesHtml,
+      text: `${deliveryData.name} <${deliveryData.email}>${company ? `\n${company}` : ''}\n\n${deliveryData.message}`,
+    }
+  } catch {
+    await releaseLease(lease)
+    logEvent('error', 'owner-delivery-prepare-failed', data.submissionId)
+    return { ok: false, code: 'persistence' }
+  }
+
   const currentAttempts = document.deliveryAttempts ?? 0
   const attemptedAt = new Date()
   if (!(await renewLease(lease, 'pending-claim'))) {
@@ -374,31 +399,6 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
   } catch {
     await releaseLease(lease)
     logEvent('error', 'delivery-pending-update-failed', data.submissionId)
-    return { ok: false, code: 'persistence' }
-  }
-
-  let preparedOwnerMail: Parameters<typeof sendEmail>[0]
-  try {
-    const salesHtml = await render(
-      React.createElement(ContactSales, {
-        messageId: document.id,
-        name: deliveryData.name,
-        email: deliveryData.email,
-        company,
-        message: deliveryData.message,
-        locale: deliveryData.locale,
-        siteUrl,
-      }),
-    )
-    preparedOwnerMail = {
-      to: salesEmail,
-      subject: subjects.contactSales(deliveryData.name),
-      html: salesHtml,
-      text: `${deliveryData.name} <${deliveryData.email}>${company ? `\n${company}` : ''}\n\n${deliveryData.message}`,
-    }
-  } catch {
-    await releaseLease(lease)
-    logEvent('error', 'owner-delivery-prepare-failed', data.submissionId)
     return { ok: false, code: 'persistence' }
   }
 
