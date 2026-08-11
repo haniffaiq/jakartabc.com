@@ -550,16 +550,14 @@ describe('submitBooking', () => {
     },
   )
 
-  it('returns accepted pending without persistence or mail for a concurrent in-progress request', async () => {
+  it('fails closed without Payload access for a concurrent in-progress request', async () => {
     acquireMock.mockResolvedValueOnce({ state: 'in-progress' })
 
-    expect(await submitBooking(fd())).toEqual({
-      ok: true,
-      submissionId: SUBMISSION_ID,
-      delivery: 'pending',
-    })
+    expect(await submitBooking(fd())).toEqual({ ok: false, code: 'temporarily-unavailable' })
+    expect(payloadClientMock).not.toHaveBeenCalled()
     expect(findMock).not.toHaveBeenCalled()
     expect(createMock).not.toHaveBeenCalled()
+    expect(updateMock).not.toHaveBeenCalled()
     expect(sendMock).not.toHaveBeenCalled()
   })
 
@@ -971,11 +969,31 @@ describe('submitBooking', () => {
     expect([first, second]).toEqual(
       expect.arrayContaining([
         { ok: true, submissionId: SUBMISSION_ID, delivery: 'sent' },
-        { ok: true, submissionId: SUBMISSION_ID, delivery: 'pending' },
+        { ok: false, code: 'temporarily-unavailable' },
       ]),
     )
     expect(createMock).toHaveBeenCalledTimes(1)
     expect(sendMock.mock.calls.filter(([mail]) => mail.to === 'sales@example.co')).toHaveLength(1)
+  })
+
+  it('never reports concurrent acceptance when the acquired request fails before create', async () => {
+    acquireMock
+      .mockResolvedValueOnce({ state: 'acquired', lease: LEASE })
+      .mockResolvedValueOnce({ state: 'in-progress' })
+    payloadClientMock.mockRejectedValueOnce(new Error('database unavailable before create'))
+
+    const results = await Promise.all([submitBooking(fd()), submitBooking(fd())])
+
+    expect(results).toEqual([
+      { ok: false, code: 'temporarily-unavailable' },
+      { ok: false, code: 'temporarily-unavailable' },
+    ])
+    expect(payloadClientMock).toHaveBeenCalledTimes(1)
+    expect(findMock).not.toHaveBeenCalled()
+    expect(createMock).not.toHaveBeenCalled()
+    expect(updateMock).not.toHaveBeenCalled()
+    expect(sendMock).not.toHaveBeenCalled()
+    expect(releaseMock).toHaveBeenCalledWith(LEASE)
   })
 
   it.each([
@@ -1011,17 +1029,35 @@ describe('submitBooking', () => {
     },
   )
 
-  it('keeps owner acceptance when visitor delivery fails', async () => {
-    sendMock
-      .mockResolvedValueOnce({ ok: true, id: 'sales_1' })
-      .mockRejectedValueOnce(new Error('visitor@example.co secret'))
+  it.each([
+    ['resolved failure', { ok: false, error: 'visitor@example.co Bearer raw-token' }],
+    ['rejection', new Error('visitor@example.co Bearer raw-token')],
+  ])('keeps owner acceptance and logs a safe event for visitor %s', async (_case, failure) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    sendMock.mockResolvedValueOnce({ ok: true, id: 'sales_1' })
+    if (failure instanceof Error) sendMock.mockRejectedValueOnce(failure)
+    else sendMock.mockResolvedValueOnce(failure)
 
-    expect(await submitBooking(fd())).toEqual({
-      ok: true,
-      submissionId: SUBMISSION_ID,
-      delivery: 'sent',
-    })
-    expect(completeMock).toHaveBeenCalledWith(LEASE)
+    try {
+      expect(await submitBooking(fd())).toEqual({
+        ok: true,
+        submissionId: SUBMISSION_ID,
+        delivery: 'sent',
+      })
+      expect(updateMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ deliveryStatus: 'sent', deliveryError: null }),
+        }),
+      )
+      expect(warn).toHaveBeenCalledOnce()
+      expect(warn).toHaveBeenCalledWith('[booking] visitor-delivery-failed', {
+        submissionId: SUBMISSION_ID,
+      })
+      expect(JSON.stringify(warn.mock.calls)).not.toMatch(/visitor@example\.co|raw-token/)
+      expect(completeMock).toHaveBeenCalledWith(LEASE)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it.each([

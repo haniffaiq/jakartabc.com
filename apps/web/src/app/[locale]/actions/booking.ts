@@ -299,12 +299,13 @@ async function sendVisitorMail({
       ? `Halo ${data.name}, kami menerima permintaan konsultasi Anda untuk ${serviceName}.`
       : `Hello ${data.name}, we received your consultation request for ${serviceName}.`
 
-  await sendEmail({
+  const result = await sendEmail({
     to: data.email,
     subject: subjects.bookingLeadVisitor[data.locale],
     html: visitorHtml,
     text: visitorText,
   })
+  return result.ok
 }
 
 async function reconcileExisting(
@@ -366,7 +367,9 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
     return operationalFailure(data.submissionId, 'idempotency-acquire-failed')
   }
 
-  if (acquisition.state === 'in-progress') return accepted(data.submissionId, 'pending')
+  if (acquisition.state === 'in-progress') {
+    return operationalFailure(data.submissionId, 'idempotency-in-progress')
+  }
 
   let payload: PayloadBookingClient
   try {
@@ -575,13 +578,15 @@ export async function submitBooking(formData: FormData): Promise<SubmitBookingRe
     return operationalFailure(data.submissionId, 'delivery-final-persist-failed')
   }
 
+  let visitorDelivered = false
   try {
-    await sendVisitorMail({
+    visitorDelivered = await sendVisitorMail({
       data: persistedMail.data,
       salesEmail,
       serviceName: persistedMail.serviceName,
     })
-  } catch {
+  } catch {}
+  if (!visitorDelivered) {
     console.warn('[booking] visitor-delivery-failed', { submissionId: data.submissionId })
   }
 
