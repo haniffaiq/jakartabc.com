@@ -1086,7 +1086,8 @@ delivery fields but secrets/tokens are never stored.
 Validate, honeypot, trusted IP, Turnstile, Redis limit, acquire ID, and create/find by unique
 submission ID with `overrideAccess: true`. Hydrate only the persisted delivery source and finish
 the pure owner-mail render/preparation before the first renewal. Then renew the Redis lease, claim
-the untouched `pending`/attempt-zero row with the shared single-statement PostgreSQL CAS, renew
+the untouched row with the shared single-statement PostgreSQL CAS. Untouched means `pending`,
+attempt zero, and null attempt timestamp, delivered timestamp, and delivery error. Then renew
 again immediately before the provider call, send, and persist the final delivery state. A CAS
 no-match must re-read and reconcile the durable row with zero send; malformed state/read failure
 fails closed. A stale worker must never use a Payload update-by-ID to write the pending transition.
@@ -1146,7 +1147,8 @@ Expected: FAIL for direct create access, fields, duplicate prevention, and mail 
 Use scope `booking`, the shared async coordinator, trusted client IP, explicit Local API
 `overrideAccess: true`, unique submission lookup, a fresh `createSubmissionDeliveryFields()` result,
 and the shared delivery transitions. Prepare the owner message before the first renewal; then use
-renew -> initial CAS -> exact claimed-result validation -> renew immediately before provider send.
+renew -> initial CAS over the complete untouched-row predicate -> exact claimed-result validation
+-> renew immediately before provider send.
 A CAS no-match re-reads/reconciles with zero send, and an attempt count of at least one remains
 ambiguous/non-retryable. Do not duplicate Redis, SQL/CAS, error-redaction, field, or email-transition
 helpers inside the action; import the shared interfaces locked above.
@@ -1288,8 +1290,9 @@ Rename the generated timestamp consistently to `20260809_000000_stabilization` o
 The up migration must:
 
 1. add nullable unique/indexed `submission_id` fields and delivery fields for both lead tables;
-   backfill every legacy lead to `delivery_status = pending` and `delivery_attempts = 0` before
-   enforcing non-null/default constraints required by the runtime CAS;
+   backfill every legacy lead to `delivery_status = pending`, `delivery_attempts = 0`, and null
+   attempt/delivered/error evidence before enforcing non-null/default constraints required by the
+   runtime CAS;
 2. add/check delivery-status enum or constraint with pending/sent/failed;
 3. backfill Insight native `_status` and version `version__status` from old custom status values;
 4. preserve old custom status columns and legacy media data;
@@ -1339,8 +1342,10 @@ dedicated worker, and assert successful completion removes it.
 After migrate-up, create one untouched pending/attempt-zero row for each lead table and race two
 initial CAS calls against it. Assert exactly one returns `claimed`, the other returns `not-claimed`,
 the row is pending/attempt-one, `updated_at` advances, and a simulated stale claimant cannot regress
-a subsequently sent row back to pending. Repeat after down/up to prove the runtime cannot precede
-the schema and both fixed table statements match the generated migration.
+a subsequently sent row back to pending. Also assert an attempt-zero row carrying any non-null
+attempt timestamp, delivered timestamp, or delivery error is not claimable. Repeat after down/up to
+prove the runtime cannot precede the schema and both fixed table statements match the generated
+migration.
 
 - [ ] **Step 9: Verify and commit the artifact barrier**
 
