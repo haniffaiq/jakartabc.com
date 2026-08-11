@@ -189,8 +189,8 @@ describe('content cache tags', () => {
       ),
     ])
 
-    expect(insightList).toContain("tags: ['insights:list']")
-    expect(insightDetail).toContain('`insights:slug:${slug}`')
+    expect(insightList).toContain('{ tags: buildInsightCacheTags(locale) }')
+    expect(insightDetail).toContain('{ tags: buildInsightCacheTags(locale, slug) }')
     expect(insightTags({ slug: 'article', locales: ['en'] })).toEqual(
       expect.arrayContaining(['insights:list', 'insights:slug:article']),
     )
