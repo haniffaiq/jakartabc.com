@@ -11,9 +11,11 @@ type ContactRow = {
   deliveryError?: string | null
   [key: string]: unknown
 }
+type ClaimStatement = { text: string; values: [number, string, string] }
 
 const mocks = vi.hoisted(() => ({
   acquire: vi.fn(),
+  claimQuery: vi.fn(),
   complete: vi.fn(),
   create: vi.fn(),
   find: vi.fn(),
@@ -30,6 +32,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/payload', () => ({
   getPayloadClient: vi.fn(async () => ({
     create: mocks.create,
+    db: { pool: { query: mocks.claimQuery } },
     find: mocks.find,
     update: mocks.update,
   })),
@@ -115,6 +118,27 @@ describe('submitContact', () => {
     coordinatorState = 'free'
   }
 
+  function applyInitialClaim(statement: ClaimStatement) {
+    const [id, claimSubmissionId, attemptedAt] = statement.values
+    const row = [...rows.values()].find((candidate) => candidate.id === id)
+    if (
+      !row ||
+      row.submissionId !== claimSubmissionId ||
+      row.deliveryStatus !== 'pending' ||
+      row.deliveryAttempts !== 0
+    ) {
+      return { rowCount: 0, rows: [] }
+    }
+    Object.assign(row, {
+      deliveryStatus: 'pending',
+      deliveryAttempts: 1,
+      lastDeliveryAttemptAt: attemptedAt,
+      deliveredAt: null,
+      deliveryError: null,
+    })
+    return { rowCount: 1, rows: [{ id, submissionId: claimSubmissionId }] }
+  }
+
   beforeEach(() => {
     vi.restoreAllMocks()
     rows.clear()
@@ -182,6 +206,9 @@ describe('submitContact', () => {
       rows.set(id, row)
       return row
     })
+    mocks.claimQuery.mockImplementation(async (statement: ClaimStatement) =>
+      applyInitialClaim(statement),
+    )
     mocks.update.mockImplementation(
       async ({ id, data }: { id: string | number; data: Partial<ContactRow> }) => {
         const row = [...rows.values()].find((candidate) => candidate.id === id)
@@ -219,18 +246,9 @@ describe('submitContact', () => {
         status: 'new',
       },
     })
-    expect(mocks.update).toHaveBeenCalledTimes(2)
-    expect(mocks.update).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        collection: 'contact-messages',
-        id: 7,
-        overrideAccess: true,
-        data: expect.objectContaining({ deliveryStatus: 'pending', deliveryAttempts: 1 }),
-      }),
-    )
-    expect(mocks.update).toHaveBeenNthCalledWith(
-      2,
+    expect(mocks.claimQuery).toHaveBeenCalledOnce()
+    expect(mocks.update).toHaveBeenCalledOnce()
+    expect(mocks.update).toHaveBeenCalledWith(
       expect.objectContaining({
         collection: 'contact-messages',
         id: 7,
@@ -250,19 +268,38 @@ describe('submitContact', () => {
         subject: 'Terima kasih sudah menghubungi — Jakarta Business Center',
       }),
     )
-    expect(mocks.update.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mocks.claimQuery.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.sendEmail.mock.invocationCallOrder[0]!,
     )
-    expect(mocks.update.mock.invocationCallOrder[1]).toBeLessThan(
+    expect(mocks.update.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.sendEmail.mock.invocationCallOrder[1]!,
     )
     expect(mocks.sendEmail.mock.invocationCallOrder[1]).toBeLessThan(
       mocks.complete.mock.invocationCallOrder[0]!,
     )
-    const pendingData = mocks.update.mock.calls[0]?.[0].data
-    const finalData = mocks.update.mock.calls[1]?.[0].data
-    expect(finalData.lastDeliveryAttemptAt).toBe(pendingData.lastDeliveryAttemptAt)
-    expect(finalData.deliveryAttempts).toBe(pendingData.deliveryAttempts)
+    const claimedAt = mocks.claimQuery.mock.calls[0]?.[0].values[2]
+    const finalData = mocks.update.mock.calls[0]?.[0].data
+    expect(finalData.lastDeliveryAttemptAt).toBe(claimedAt)
+    expect(finalData.deliveryAttempts).toBe(1)
+  })
+
+  it('claims the initial attempt atomically through the Payload pool', async () => {
+    expect(await submitContact(fd(validContact))).toMatchObject({ ok: true, delivery: 'sent' })
+
+    expect(mocks.claimQuery).toHaveBeenCalledOnce()
+    expect(mocks.claimQuery).toHaveBeenCalledWith({
+      text: expect.stringContaining('UPDATE "public"."contact_messages"'),
+      values: [7, submissionId, expect.any(String)],
+    })
+    expect(mocks.update).toHaveBeenCalledOnce()
+    expect(mocks.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        collection: 'contact-messages',
+        id: 7,
+        overrideAccess: true,
+        data: expect.objectContaining({ deliveryStatus: 'sent', deliveryAttempts: 1 }),
+      }),
+    )
   })
 
   it('accepts once and records sanitized failed delivery for a resolved provider failure', async () => {
@@ -415,15 +452,10 @@ describe('submitContact', () => {
 
     expect(result).toEqual({ ok: true, submissionId, delivery: 'sent' })
     expect(mocks.create).not.toHaveBeenCalled()
-    expect(mocks.update).toHaveBeenCalledTimes(2)
-    expect(mocks.update).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        id: 23,
-        overrideAccess: true,
-        data: expect.objectContaining({ deliveryStatus: 'pending', deliveryAttempts: 1 }),
-      }),
+    expect(mocks.claimQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ values: [23, submissionId, expect.any(String)] }),
     )
+    expect(mocks.update).toHaveBeenCalledOnce()
     expect(mocks.sendEmail).toHaveBeenCalledTimes(2)
     expect(
       mocks.sendEmail.mock.calls.filter(([message]) => message.to === 'sales@example.com'),
@@ -449,10 +481,11 @@ describe('submitContact', () => {
       message: 'Different retry content must never enter either outbound email.',
       locale: 'id',
     }
-    mocks.update.mockRejectedValueOnce(new Error('pending persistence unavailable'))
+    mocks.claimQuery.mockRejectedValueOnce(new Error('pending persistence unavailable'))
 
     expect(await submitContact(fd(original))).toEqual({ ok: false, code: 'persistence' })
     expect(mocks.sendEmail).not.toHaveBeenCalled()
+    expect(mocks.release).toHaveBeenCalledWith(lease)
     expect(rows.get(submissionId)).toMatchObject({
       name: 'Original Contact',
       email: 'original@example.com',
@@ -696,14 +729,7 @@ describe('submitContact', () => {
 
   it('does not claim success when the final delivery-state update fails', async () => {
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    mocks.update
-      .mockImplementationOnce(async ({ id, data }: { id: number; data: Partial<ContactRow> }) => {
-        const row = rows.get(submissionId)!
-        expect(row.id).toBe(id)
-        Object.assign(row, data)
-        return row
-      })
-      .mockRejectedValueOnce(new Error('private final update details'))
+    mocks.update.mockRejectedValueOnce(new Error('private final update details'))
 
     expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
     expect(mocks.sendEmail).toHaveBeenCalledOnce()
@@ -719,18 +745,22 @@ describe('submitContact', () => {
     expect(mocks.sendEmail).toHaveBeenCalledOnce()
   })
 
-  it('fails closed before send when the pending update is a stale no-op', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    mocks.update.mockImplementationOnce(async () => rows.get(submissionId))
+  it('reconciles a lost initial claim without sending or writing through Local API', async () => {
+    mocks.claimQuery.mockResolvedValueOnce({ rowCount: 0, rows: [] })
 
-    expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
+    expect(await submitContact(fd(validContact))).toEqual({
+      ok: true,
+      submissionId,
+      delivery: 'pending',
+    })
     expect(rows.get(submissionId)).toMatchObject({
       deliveryStatus: 'pending',
       deliveryAttempts: 0,
     })
+    expect(mocks.find).toHaveBeenCalledTimes(2)
+    expect(mocks.update).not.toHaveBeenCalled()
     expect(mocks.sendEmail).not.toHaveBeenCalled()
-    expect(mocks.complete).not.toHaveBeenCalled()
-    expect(mocks.release).toHaveBeenCalledWith(lease)
+    expect(mocks.complete).toHaveBeenCalledWith(lease)
   })
 
   it('keeps attempts untouched when owner email preparation fails and retries once', async () => {
@@ -807,7 +837,8 @@ describe('submitContact', () => {
         code: 'temporarily-unavailable',
       })
       expect(mocks.renew).toHaveBeenCalledTimes(2)
-      expect(mocks.update).toHaveBeenCalledOnce()
+      expect(mocks.claimQuery).toHaveBeenCalledOnce()
+      expect(mocks.update).not.toHaveBeenCalled()
       expect(rows.get(submissionId)).toMatchObject({
         deliveryStatus: 'pending',
         deliveryAttempts: 1,
@@ -826,7 +857,8 @@ describe('submitContact', () => {
       ok: false,
       code: 'temporarily-unavailable',
     })
-    expect(mocks.update).toHaveBeenCalledOnce()
+    expect(mocks.claimQuery).toHaveBeenCalledOnce()
+    expect(mocks.update).not.toHaveBeenCalled()
     expect(rows.get(submissionId)).toMatchObject({
       deliveryStatus: 'pending',
       deliveryAttempts: 1,
@@ -875,19 +907,62 @@ describe('submitContact', () => {
     ])
   })
 
+  it('prevents a stale worker from overwriting the winner after its successful renewal', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    let signalStaleClaimStarted!: () => void
+    const staleClaimStarted = new Promise<void>((resolve) => {
+      signalStaleClaimStarted = resolve
+    })
+    let allowStaleClaim!: () => void
+    const staleClaimGate = new Promise<void>((resolve) => {
+      allowStaleClaim = resolve
+    })
+    let claimNumber = 0
+    mocks.claimQuery.mockImplementation(async (statement: ClaimStatement) => {
+      claimNumber += 1
+      if (claimNumber === 1) {
+        signalStaleClaimStarted()
+        await staleClaimGate
+      }
+      return applyInitialClaim(statement)
+    })
+
+    const staleWorker = submitContact(fd(validContact))
+    await staleClaimStarted
+    expireActiveLease()
+
+    const currentWorker = await submitContact(fd(validContact))
+    allowStaleClaim()
+    const staleResult = await staleWorker
+
+    expect(currentWorker).toEqual({ ok: true, submissionId, delivery: 'sent' })
+    expect(staleResult).toEqual({ ok: false, code: 'temporarily-unavailable' })
+    expect(mocks.claimQuery).toHaveBeenCalledTimes(2)
+    expect(mocks.create).toHaveBeenCalledOnce()
+    expect(mocks.update).toHaveBeenCalledOnce()
+    expect(rows.get(submissionId)).toMatchObject({
+      deliveryStatus: 'sent',
+      deliveryAttempts: 1,
+    })
+    expect(
+      mocks.sendEmail.mock.calls.filter(([message]) => message.to === 'sales@example.com'),
+    ).toHaveLength(1)
+  })
+
   it.each([
     ['id', { id: 999 }],
     ['submission identity', { submissionId: '22222222-2222-4222-8222-222222222222' }],
   ])(
-    'fails closed before send when the pending update returns a different %s',
+    'fails closed before send when the atomic claim returns a different %s',
     async (_case, wrong) => {
       vi.spyOn(console, 'error').mockImplementation(() => undefined)
-      mocks.update.mockImplementationOnce(
-        async ({ data }: { data: Partial<ContactRow> }) =>
-          ({ ...rows.get(submissionId)!, ...data, ...wrong }) as ContactRow,
-      )
+      mocks.claimQuery.mockImplementationOnce(async (statement: ClaimStatement) => ({
+        rowCount: 1,
+        rows: [{ id: statement.values[0], submissionId: statement.values[1], ...wrong }],
+      }))
 
       expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
+      expect(mocks.update).not.toHaveBeenCalled()
       expect(mocks.sendEmail).not.toHaveBeenCalled()
       expect(mocks.complete).not.toHaveBeenCalled()
       expect(mocks.release).toHaveBeenCalledWith(lease)
@@ -895,13 +970,7 @@ describe('submitContact', () => {
   )
 
   it('fails closed when Payload does not persist the requested final delivery state', async () => {
-    mocks.update
-      .mockImplementationOnce(async ({ data }: { data: Partial<ContactRow> }) => {
-        const row = rows.get(submissionId)!
-        Object.assign(row, data)
-        return row
-      })
-      .mockImplementationOnce(async () => rows.get(submissionId))
+    mocks.update.mockImplementationOnce(async () => rows.get(submissionId))
 
     expect(await submitContact(fd(validContact))).toEqual({ ok: false, code: 'persistence' })
     expect(rows.get(submissionId)?.deliveryStatus).toBe('pending')

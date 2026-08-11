@@ -11,11 +11,14 @@ import { getPayloadClient } from '@/lib/payload'
 import { getClientIP } from '@/lib/request/client-ip'
 import {
   attemptDelivery,
-  beginDeliveryAttempt,
   type DeliveryAttemptResult,
   type DeliveryStatus,
   type PendingDeliveryTransition,
 } from '@/lib/submissions/delivery'
+import {
+  claimInitialDeliveryAttempt,
+  type DeliveryClaimDatabase,
+} from '@/lib/submissions/deliveryClaim'
 import { contactSchema } from '@/lib/validation/contact'
 
 export type SubmitResult =
@@ -57,6 +60,7 @@ type ContactPayloadClient = {
     data: Record<string, unknown>
     overrideAccess: true
   }) => Promise<ContactDocument>
+  db: { pool: DeliveryClaimDatabase }
   find: (args: {
     collection: 'contact-messages'
     limit: 1
@@ -113,23 +117,6 @@ function samePendingTransition(
     persisted.lastDeliveryAttemptAt === attempted.lastDeliveryAttemptAt &&
     persisted.deliveredAt === attempted.deliveredAt &&
     persisted.deliveryError === attempted.deliveryError
-  )
-}
-
-function persistedPendingMatches(
-  persisted: ContactDocument,
-  expected: PendingDeliveryTransition,
-  expectedId: string | number,
-  expectedSubmissionId: string,
-) {
-  return (
-    persisted.id === expectedId &&
-    persisted.submissionId === expectedSubmissionId &&
-    persisted.deliveryStatus === expected.deliveryStatus &&
-    persisted.deliveryAttempts === expected.deliveryAttempts &&
-    persisted.lastDeliveryAttemptAt === expected.lastDeliveryAttemptAt &&
-    persisted.deliveredAt === expected.deliveredAt &&
-    persisted.deliveryError === expected.deliveryError
   )
 }
 
@@ -382,23 +369,33 @@ export async function submitContact(formData: FormData, _ip?: string): Promise<S
   }
   let pending: PendingDeliveryTransition
   try {
-    pending = beginDeliveryAttempt(currentAttempts, attemptedAt)
-    const expectedDocumentId = document.id
-    const persistedPending = await payload.update({
+    const claim = await claimInitialDeliveryAttempt({
+      database: payload.db.pool,
       collection: 'contact-messages',
-      id: expectedDocumentId,
-      overrideAccess: true,
-      data: pending,
+      id: typeof document.id === 'number' ? document.id : Number.NaN,
+      submissionId: data.submissionId,
+      attemptedAt,
     })
-    if (
-      !persistedPendingMatches(persistedPending, pending, expectedDocumentId, data.submissionId)
-    ) {
-      throw new Error('Delivery pending transition was not persisted')
+    if (claim.state === 'not-claimed') {
+      let reconciled: ContactDocument | undefined
+      try {
+        reconciled = await findBySubmissionId(payload, data.submissionId)
+      } catch {
+        await releaseLease(lease)
+        logEvent('error', 'delivery-claim-reconciliation-failed', data.submissionId)
+        return { ok: false, code: 'persistence' }
+      }
+      if (!reconciled) {
+        await releaseLease(lease)
+        logEvent('error', 'delivery-claim-reconciliation-missing', data.submissionId)
+        return { ok: false, code: 'persistence' }
+      }
+      return completeExisting(reconciled, data.submissionId, lease)
     }
-    document = persistedPending
+    pending = claim.pending
   } catch {
     await releaseLease(lease)
-    logEvent('error', 'delivery-pending-update-failed', data.submissionId)
+    logEvent('error', 'delivery-initial-claim-failed', data.submissionId)
     return { ok: false, code: 'persistence' }
   }
 
