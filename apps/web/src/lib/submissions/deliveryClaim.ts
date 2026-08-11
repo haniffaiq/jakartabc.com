@@ -14,6 +14,9 @@ WHERE
   AND "submission_id" = $2
   AND "delivery_status" = 'pending'
   AND "delivery_attempts" = 0
+  AND "last_delivery_attempt_at" IS NULL
+  AND "delivered_at" IS NULL
+  AND "delivery_error" IS NULL
 RETURNING "id", "submission_id" AS "submissionId"
 `
 
@@ -31,6 +34,9 @@ WHERE
   AND "submission_id" = $2
   AND "delivery_status" = 'pending'
   AND "delivery_attempts" = 0
+  AND "last_delivery_attempt_at" IS NULL
+  AND "delivered_at" IS NULL
+  AND "delivery_error" IS NULL
 RETURNING "id", "submission_id" AS "submissionId"
 `
 

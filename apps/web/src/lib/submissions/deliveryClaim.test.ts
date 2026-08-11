@@ -8,6 +8,15 @@ import {
 } from './deliveryClaim'
 
 type Statement = { text: string; values: unknown[] }
+type FakeClaimRow = {
+  id: number
+  submissionId: string
+  deliveryStatus: 'pending' | 'sent' | 'failed'
+  deliveryAttempts: number
+  lastDeliveryAttemptAt: string | null
+  deliveredAt: string | null
+  deliveryError: string | null
+}
 
 const contactId = '11111111-1111-4111-8111-111111111111'
 const bookingId = '22222222-2222-4222-8222-222222222222'
@@ -22,6 +31,44 @@ function databaseReturning(result: unknown) {
 
 function claimedResult(id: number, submissionId: string) {
   return { rowCount: 1, rows: [{ id, submissionId }] }
+}
+
+class FakeAtomicClaimDatabase {
+  readonly query = vi.fn(async (statement: Statement) => {
+    await Promise.resolve()
+    const [id, submissionId, timestamp] = statement.values
+    const requiresNull = (column: string) => statement.text.includes(`AND "${column}" IS NULL`)
+    const matches =
+      this.row.id === id &&
+      this.row.submissionId === submissionId &&
+      this.row.deliveryStatus === 'pending' &&
+      this.row.deliveryAttempts === 0 &&
+      (!requiresNull('last_delivery_attempt_at') || this.row.lastDeliveryAttemptAt === null) &&
+      (!requiresNull('delivered_at') || this.row.deliveredAt === null) &&
+      (!requiresNull('delivery_error') || this.row.deliveryError === null)
+
+    if (!matches) return { rowCount: 0, rows: [] }
+
+    this.row.deliveryAttempts = 1
+    this.row.lastDeliveryAttemptAt = timestamp as string
+    this.row.deliveredAt = null
+    this.row.deliveryError = null
+    return claimedResult(this.row.id, this.row.submissionId)
+  })
+
+  constructor(readonly row: FakeClaimRow) {}
+}
+
+function untouchedRow(): FakeClaimRow {
+  return {
+    id: 17,
+    submissionId: contactId,
+    deliveryStatus: 'pending',
+    deliveryAttempts: 0,
+    lastDeliveryAttemptAt: null,
+    deliveredAt: null,
+    deliveryError: null,
+  }
 }
 
 describe('initial PostgreSQL delivery claim', () => {
@@ -63,9 +110,12 @@ describe('initial PostgreSQL delivery claim', () => {
       expect(statement?.text).toMatch(/"last_delivery_attempt_at" = \$3/)
       expect(statement?.text).toMatch(/"updated_at" = \$3/)
       expect(statement?.text).toMatch(/WHERE\s+"id" = \$1/)
-      expect(statement?.text).toMatch(/"submission_id" = \$2/)
-      expect(statement?.text).toMatch(/"delivery_status" = 'pending'/)
-      expect(statement?.text).toMatch(/"delivery_attempts" = 0/)
+      expect(statement?.text).toMatch(/AND "submission_id" = \$2/)
+      expect(statement?.text).toMatch(/AND "delivery_status" = 'pending'/)
+      expect(statement?.text).toMatch(/AND "delivery_attempts" = 0/)
+      expect(statement?.text).toMatch(/AND "last_delivery_attempt_at" IS NULL/)
+      expect(statement?.text).toMatch(/AND "delivered_at" IS NULL/)
+      expect(statement?.text).toMatch(/AND "delivery_error" IS NULL/)
       expect(statement?.text).toMatch(/RETURNING\s+"id",\s+"submission_id" AS "submissionId"/)
       expect(statement?.text).not.toContain(submissionId)
       expect(statement?.text).not.toMatch(/locale/i)
@@ -74,15 +124,7 @@ describe('initial PostgreSQL delivery claim', () => {
   )
 
   it('allows exactly one concurrent claimant for the untouched row', async () => {
-    let untouched = true
-    const database = {
-      query: vi.fn(async (statement: Statement) => {
-        await Promise.resolve()
-        if (!untouched) return { rowCount: 0, rows: [] }
-        untouched = false
-        return claimedResult(statement.values[0] as number, statement.values[1] as string)
-      }),
-    }
+    const database = new FakeAtomicClaimDatabase(untouchedRow())
 
     const results = await Promise.all([
       claimInitialDeliveryAttempt({
@@ -103,6 +145,34 @@ describe('initial PostgreSQL delivery claim', () => {
 
     expect(results.filter(({ state }) => state === 'claimed')).toHaveLength(1)
     expect(results.filter(({ state }) => state === 'not-claimed')).toHaveLength(1)
+    expect(database.row).toMatchObject({
+      deliveryStatus: 'pending',
+      deliveryAttempts: 1,
+      lastDeliveryAttemptAt: attemptedAt.toISOString(),
+      deliveredAt: null,
+      deliveryError: null,
+    })
+  })
+
+  it.each([
+    ['attempt timestamp', { lastDeliveryAttemptAt: '2026-08-10T00:00:00.000Z' }],
+    ['delivery timestamp', { deliveredAt: '2026-08-10T00:00:01.000Z' }],
+    ['delivery error', { deliveryError: 'delivery.provider-send-failed|TimeoutError' }],
+  ])('does not claim a malformed attempt-zero row carrying %s', async (_case, dirty) => {
+    const row = { ...untouchedRow(), ...dirty }
+    const original = { ...row }
+    const database = new FakeAtomicClaimDatabase(row)
+
+    const result = await claimInitialDeliveryAttempt({
+      database,
+      collection: 'contact-messages',
+      id: row.id,
+      submissionId: row.submissionId,
+      attemptedAt,
+    })
+
+    expect(result).toEqual({ state: 'not-claimed' })
+    expect(database.row).toEqual(original)
   })
 
   it('returns a frozen non-error result when no untouched row matches', async () => {
