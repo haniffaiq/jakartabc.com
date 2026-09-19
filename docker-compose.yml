@@ -1,14 +1,16 @@
 name: jakartabc
 
 # App-only stack: web (FE) + portal (BE) + web-migrate (init container).
-# Postgres runs as a shared/external instance — set DATABASE_URL accordingly.
+# Postgres, Redis and MinIO are shared/external services. Locally they come
+# from the `infa-basic` project, which owns the `shared-infra` network; the
+# app containers join it and address them by service name (postgres, redis,
+# minio). On a server, point the URLs at whatever hosts them instead.
 # TLS termination is done by a native nginx on the server host, not here.
 
 services:
   # Init container: applies committed Payload migrations against $DATABASE_URL.
   # Runs once per `docker compose up`; web/portal wait for it to exit 0.
-  # DATABASE_URL points at the shared Postgres (host.docker.internal for a DB
-  # on the server host, or a managed-DB connection string).
+  # DATABASE_URL points at the shared Postgres.
   web-migrate:
     image: jakartabc-web-builder
     build:
@@ -25,11 +27,7 @@ services:
     command: pnpm --filter @jakartabc/web exec payload migrate
     working_dir: /repo
     networks:
-      - internal
-    # Reach a Postgres running on the server host (DATABASE_URL points at
-    # host.docker.internal). `host-gateway` makes that name resolve on Linux.
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      - shared-infra
     restart: 'no'
 
   web:
@@ -50,9 +48,7 @@ services:
     volumes:
       - uploads:/app/apps/web/uploads
     networks:
-      - internal
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      - shared-infra
     expose:
       - '3000'
     ports:
@@ -70,9 +66,7 @@ services:
       web-migrate:
         condition: service_completed_successfully
     networks:
-      - internal
-    extra_hosts:
-      - 'host.docker.internal:host-gateway'
+      - shared-infra
     expose:
       - '3001'
     ports:
@@ -82,5 +76,6 @@ volumes:
   uploads:
 
 networks:
-  internal:
-    driver: bridge
+  # Owned by the `infa-basic` compose project (postgres, redis, minio).
+  shared-infra:
+    external: true

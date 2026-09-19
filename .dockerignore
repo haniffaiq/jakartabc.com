@@ -1,11 +1,22 @@
-node_modules
-.next
-.turbo
+# Docker only matches these at the root unless they are prefixed with `**/`,
+# so use `**/` for anything that also appears inside workspaces or worktrees.
+**/node_modules
+**/.next
+**/.turbo
+**/dist
 .git
+.worktrees
+
+# Local-only env and artifacts
 .env
 .env.*.local
 .env.local
 *.log
-coverage
-playwright-report
-test-results
+**/coverage
+**/playwright-report
+**/test-results
+
+# Not needed to build the apps
+docs
+scripts
+.github

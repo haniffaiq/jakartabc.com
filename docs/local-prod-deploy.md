@@ -1,9 +1,38 @@
 # Local prod-like deploy
 
 Compose stack di `docker-compose.yml` adalah **app saja**:
-**web + portal + web-migrate** (init container). Postgres dipakai sebagai
-**instance shared/eksternal**, dan reverse proxy + TLS ditangani **nginx
-native di host** (di luar repo ini).
+**web + portal + web-migrate** (init container). Postgres, Redis, dan MinIO
+dipakai sebagai **instance shared/eksternal**, dan reverse proxy + TLS
+ditangani **nginx native di host** (di luar repo ini).
+
+## Shared infra (lokal, OrbStack)
+
+Infra lokal berasal dari project compose terpisah, `tools/infa-basic`, yang
+memiliki network `shared-infra` dan menyediakan satu database/bucket/ACL-user
+per app. Untuk repo ini namanya `jbc`.
+
+Stack app **join network itu sebagai external**, jadi host-nya adalah nama
+service infra — bukan `host.docker.internal`:
+
+| Service  | Host dari dalam container                         | Published di host                  |
+| -------- | ------------------------------------------------- | ---------------------------------- |
+| Postgres | `postgres:5432`, db/user `jbc`                    | `127.0.0.1:5432`                   |
+| Redis    | `redis:6379`, ACL user `jbc` (key prefix `jbc:*`) | `127.0.0.1:6379`                   |
+| MinIO    | `minio:9000`, bucket `jbc`                        | `127.0.0.1:9000` (console `:9001`) |
+
+Pastikan infra hidup dulu:
+
+```sh
+cd ../../tools/infa-basic && docker compose up -d postgres redis minio
+```
+
+`MINIO_PUBLIC_URL` dipakai browser, bukan container — isi dengan
+`http://localhost:9000/jbc`. Bucket butuh anonymous read karena Payload
+men-generate URL media langsung ke MinIO:
+
+```sh
+mc anonymous set download local/jbc
+```
 
 ## Run
 
@@ -11,9 +40,10 @@ native di host** (di luar repo ini).
 docker compose up -d --build
 ```
 
-Set `DATABASE_URL` di `.env` ke Postgres yang bisa dijangkau:
+Di server (tanpa `shared-infra`), ganti network di `docker-compose.yml` dan
+arahkan `DATABASE_URL` / `REDIS_URL` / `MINIO_ENDPOINT` ke host yang sesuai:
 
-- DB di mesin host: pakai `host.docker.internal`, bukan `localhost`.
+- Service di mesin host: pakai `host.docker.internal`, bukan `localhost`.
 - Managed DB: tambah `?sslmode=require` (atau `no-verify` untuk RDS).
 
 ## Endpoints (local)
@@ -55,11 +85,20 @@ URL valid (zod check).
 nginx + certbot di-setup langsung di server host, bukan di compose stack ini.
 Proxy ke container app:
 
-- `web`   → `http://127.0.0.1:3100`
+- `web` → `http://127.0.0.1:3100`
 - `portal` → `http://127.0.0.1:3101`
 
 Prasyarat: DNS domain pointing ke IP server, port 80/443 publik, certbot
 issue + renew cert untuk tiap server block.
+
+## Turnstile di NODE_ENV=production
+
+`apps/web/src/env.ts` menolak test key always-pass milik Cloudflare saat
+`NODE_ENV=production` — dan compose memang set production. Jadi untuk deploy
+lokal, `TURNSTILE_SECRET_KEY` / `NEXT_PUBLIC_TURNSTILE_SITE_KEY` diisi
+placeholder: halaman tetap render, tapi submit contact/booking dijawab
+`{ ok: false, code: 'captcha' }`. Isi key asli kalau mau menguji form
+end-to-end.
 
 ## Cleanup / reset
 
@@ -68,7 +107,8 @@ docker compose down       # stop, keep volumes
 docker compose down -v    # stop + drop uploads volume
 ```
 
-Data Postgres tidak tersentuh `docker compose down` — DB instance eksternal.
+Data Postgres, Redis, dan MinIO tidak tersentuh `docker compose down` —
+semuanya instance eksternal milik `tools/infa-basic`.
 
 ## Verifikasi cepat
 
