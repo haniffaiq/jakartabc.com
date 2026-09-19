@@ -1,3 +1,4 @@
+import { withPayload } from '@payloadcms/next/withPayload'
 import createNextIntlPlugin from 'next-intl/plugin'
 import type { NextConfig } from 'next'
 
@@ -16,7 +17,7 @@ const SECURITY_HEADERS = [
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self' data:",
       "connect-src 'self' https://challenges.cloudflare.com",
-      "frame-src https://challenges.cloudflare.com",
+      'frame-src https://challenges.cloudflare.com',
     ].join('; '),
   },
 ]
@@ -24,6 +25,8 @@ const SECURITY_HEADERS = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  // withPayload would otherwise append an X-Powered-By naming the stack.
+  poweredByHeader: false,
   typedRoutes: true,
   images: {
     formats: ['image/avif', 'image/webp'],
@@ -38,4 +41,8 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default withNextIntl(nextConfig)
+// Payload drags in drizzle-kit -> esbuild, whose native binary Turbopack
+// cannot parse. withPayload marks those packages external (and excludes
+// drizzle-kit from the standalone trace); without it every route that
+// reaches payload.config fails to compile.
+export default withPayload(withNextIntl(nextConfig))

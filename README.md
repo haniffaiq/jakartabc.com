@@ -55,12 +55,23 @@ Edit `.env` before booting the app. At minimum, set:
 - `DEFAULT_LOCALE=en`
 
 Point `DATABASE_URL` at a reachable Postgres 16 (shared dev instance or a
-local one you manage), then start the app:
+local one you manage), apply the schema, then start the app:
 
 ```bash
 pnpm --filter @jakartabc/web exec payload generate:types
+pnpm --filter @jakartabc/web exec payload migrate
 pnpm dev
 ```
+
+`pnpm dev` first runs `scripts/sync-dev-env.mjs`, which derives
+`apps/*/.env.local` from the root `.env`. Two reasons it has to:
+`next dev` only reads env files from the Next app directory, and the root
+`.env` addresses shared infra by its Compose service names, which do not
+resolve from the host. Edit the root `.env` — the generated files are
+overwritten on every run.
+
+A skipped `payload migrate` shows up as `relation "services" does not exist`
+and a 500 on every DB-backed page.
 
 Visit:
 
