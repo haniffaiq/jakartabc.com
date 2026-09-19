@@ -1,16 +1,12 @@
-import path from 'node:path'
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vitest/config'
+import { vitestPreset } from '@jakartabc/config/vitest'
 
-export default defineConfig({
+export default vitestPreset({
+  root: new URL('.', import.meta.url),
+  domSetupFiles: ['./vitest.setup.ts'],
   plugins: [react()],
-  resolve: {
-    alias: { '@': path.resolve(__dirname, './src') },
-  },
-  test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: ['./vitest.setup.ts'],
-    css: false,
-  },
+  // Components are authored mobile-first; pin the viewport so `matchMedia`
+  // breakpoints resolve deterministically instead of following happy-dom's
+  // 1024px default.
+  domEnvironmentOptions: { happyDOM: { width: 375, height: 667 } },
 })

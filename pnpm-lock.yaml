@@ -201,9 +201,9 @@ importers:
       autoprefixer:
         specifier: 10.4.20
         version: 10.4.20(postcss@8.4.47)
-      jsdom:
-        specifier: 25.0.1
-        version: 25.0.1
+      happy-dom:
+        specifier: 15.11.7
+        version: 15.11.7
       postcss:
         specifier: 8.4.47
         version: 8.4.47
@@ -218,9 +218,13 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 4.1.10
-        version: 4.1.10(@types/node@20.16.11)(happy-dom@20.11.2)(jsdom@25.0.1)(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.19.2)(yaml@2.9.0))
+        version: 4.1.10(@types/node@20.16.11)(happy-dom@15.11.7)(jsdom@25.0.1)(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.19.2)(yaml@2.9.0))
 
   packages/config:
+    dependencies:
+      vitest:
+        specifier: '>=4'
+        version: 4.1.10(@types/node@22.10.2)(happy-dom@20.14.5)(jsdom@25.0.1)(vite@6.4.3(@types/node@22.10.2)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0))
     devDependencies:
       '@next/eslint-plugin-next':
         specifier: 16.2.11
@@ -272,7 +276,7 @@ importers:
         version: 6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0)
       vitest:
         specifier: 4.1.10
-        version: 4.1.10(@types/node@20.16.11)(happy-dom@20.11.2)(jsdom@25.0.1)(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0))
+        version: 4.1.10(@types/node@20.16.11)(happy-dom@20.14.5)(jsdom@25.0.1)(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0))
 
   packages/email:
     dependencies:
@@ -356,9 +360,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: 5.2.0
         version: 5.2.0(vite@6.4.3(@types/node@22.10.2)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0))
-      jsdom:
-        specifier: 25.0.1
-        version: 25.0.1
+      happy-dom:
+        specifier: 20.14.5
+        version: 20.14.5
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -376,7 +380,7 @@ importers:
         version: 6.4.3(@types/node@22.10.2)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0)
       vitest:
         specifier: 4.1.10
-        version: 4.1.10(@types/node@22.10.2)(happy-dom@20.11.2)(jsdom@25.0.1)(vite@6.4.3(@types/node@22.10.2)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0))
+        version: 4.1.10(@types/node@22.10.2)(happy-dom@20.14.5)(jsdom@25.0.1)(vite@6.4.3(@types/node@22.10.2)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0))
 
 packages:
 
@@ -3923,6 +3927,10 @@ packages:
     resolution: {integrity: sha512-7MB+bJLkxu3SowAfBJbjW+c55kNz5tkR45gu2qzrxznezhLeN5YIlJbwUgSzlGc+qWoZ8Ykg71H5ezz69xixrw==}
     engines: {node: '>=20.0.0'}
 
+  happy-dom@20.14.5:
+    resolution: {integrity: sha512-x/RzkpWO40bTjIoT30iQtt64FLLmH/iRcUCN2X//bLx7H3ifkdfPXyqsro/OYtqzIAhiLMMA7mmiOR9C3NOKjQ==}
+    engines: {node: '>=20.0.0'}
+
   has-bigints@1.1.0:
     resolution: {integrity: sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg==}
     engines: {node: '>= 0.4'}
@@ -5699,8 +5707,8 @@ packages:
   third-party-web@0.26.7:
     resolution: {integrity: sha512-buUzX4sXC4efFX6xg2bw6/eZsCUh8qQwSavC4D9HpONMFlRbcHhD8Je5qwYdCpViR6q0qla2wPP+t91a2vgolg==}
 
-  third-party-web@0.29.2:
-    resolution: {integrity: sha512-fegtha91tq2DHphyoiBXVHjVi2YG9zFaRnboT9C28tO1en9Y3wJsfspuy40F+u5wl3hHVbw7cnd1b67kEGHb8g==}
+  third-party-web@0.30.0:
+    resolution: {integrity: sha512-p+PfyL5U0ediGzvwPzMSdD9MnC8rHW6nWJJVLIQvqN7RsSqfaZ+7n4c9GILqH36EYR0eXB9CzAeCRnKFr/9uJg==}
 
   thread-stream@3.1.0:
     resolution: {integrity: sha512-OqyPZ9u96VohAyMfJykzmivOrY2wfMSf3C5TtFJVgN+Hm6aj+voFhlK+kZEIv2FBh1X6Xp3DlnCOfEQ3B2J86A==}
@@ -6251,6 +6259,7 @@ snapshots:
       '@csstools/css-parser-algorithms': 3.0.5(@csstools/css-tokenizer@3.0.4)
       '@csstools/css-tokenizer': 3.0.4
       lru-cache: 10.4.3
+    optional: true
 
   '@aws-sdk/checksums@3.1000.26':
     dependencies:
@@ -6557,12 +6566,14 @@ snapshots:
 
   '@borewit/text-codec@0.2.2': {}
 
-  '@csstools/color-helpers@5.1.0': {}
+  '@csstools/color-helpers@5.1.0':
+    optional: true
 
   '@csstools/css-calc@2.1.4(@csstools/css-parser-algorithms@3.0.5(@csstools/css-tokenizer@3.0.4))(@csstools/css-tokenizer@3.0.4)':
     dependencies:
       '@csstools/css-parser-algorithms': 3.0.5(@csstools/css-tokenizer@3.0.4)
       '@csstools/css-tokenizer': 3.0.4
+    optional: true
 
   '@csstools/css-color-parser@3.1.0(@csstools/css-parser-algorithms@3.0.5(@csstools/css-tokenizer@3.0.4))(@csstools/css-tokenizer@3.0.4)':
     dependencies:
@@ -6570,12 +6581,15 @@ snapshots:
       '@csstools/css-calc': 2.1.4(@csstools/css-parser-algorithms@3.0.5(@csstools/css-tokenizer@3.0.4))(@csstools/css-tokenizer@3.0.4)
       '@csstools/css-parser-algorithms': 3.0.5(@csstools/css-tokenizer@3.0.4)
       '@csstools/css-tokenizer': 3.0.4
+    optional: true
 
   '@csstools/css-parser-algorithms@3.0.5(@csstools/css-tokenizer@3.0.4)':
     dependencies:
       '@csstools/css-tokenizer': 3.0.4
+    optional: true
 
-  '@csstools/css-tokenizer@3.0.4': {}
+  '@csstools/css-tokenizer@3.0.4':
+    optional: true
 
   '@date-fns/tz@1.2.0': {}
 
@@ -7615,7 +7629,7 @@ snapshots:
   '@paulirish/trace_engine@0.0.53':
     dependencies:
       legacy-javascript: 0.0.1
-      third-party-web: 0.29.2
+      third-party-web: 0.30.0
 
   '@payloadcms/db-postgres@3.86.0(payload@3.86.0(graphql@16.14.0)(typescript@5.9.3))':
     dependencies:
@@ -8715,7 +8729,8 @@ snapshots:
 
   async-function@1.0.0: {}
 
-  asynckit@0.4.0: {}
+  asynckit@0.4.0:
+    optional: true
 
   atomic-sleep@1.0.0: {}
 
@@ -8985,6 +9000,7 @@ snapshots:
   combined-stream@1.0.8:
     dependencies:
       delayed-stream: 1.0.0
+    optional: true
 
   commander@10.0.1: {}
 
@@ -9076,6 +9092,7 @@ snapshots:
     dependencies:
       '@asamuzakjp/css-color': 3.2.0
       rrweb-cssom: 0.8.0
+    optional: true
 
   csstype@3.1.3: {}
 
@@ -9089,6 +9106,7 @@ snapshots:
     dependencies:
       whatwg-mimetype: 4.0.0
       whatwg-url: 14.2.0
+    optional: true
 
   data-view-buffer@1.0.2:
     dependencies:
@@ -9179,7 +9197,8 @@ snapshots:
       escodegen: 2.1.0
       esprima: 4.0.1
 
-  delayed-stream@1.0.0: {}
+  delayed-stream@1.0.0:
+    optional: true
 
   depd@2.0.0: {}
 
@@ -9294,7 +9313,8 @@ snapshots:
 
   entities@4.5.0: {}
 
-  entities@6.0.1: {}
+  entities@6.0.1:
+    optional: true
 
   entities@7.0.1: {}
 
@@ -9878,6 +9898,7 @@ snapshots:
       es-set-tostringtag: 2.1.0
       hasown: 2.0.3
       mime-types: 2.1.35
+    optional: true
 
   forwarded@0.2.0: {}
 
@@ -10053,6 +10074,19 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
+  happy-dom@20.14.5:
+    dependencies:
+      '@types/node': 22.10.2
+      '@types/whatwg-mimetype': 3.0.2
+      '@types/ws': 8.18.1
+      buffer-image-size: 0.6.4
+      entities: 7.0.1
+      whatwg-mimetype: 3.0.0
+      ws: 8.21.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   has-bigints@1.1.0: {}
 
   has-flag@3.0.0: {}
@@ -10090,6 +10124,7 @@ snapshots:
   html-encoding-sniffer@4.0.0:
     dependencies:
       whatwg-encoding: 3.1.1
+    optional: true
 
   html-escaper@2.0.2: {}
 
@@ -10141,6 +10176,7 @@ snapshots:
   iconv-lite@0.6.3:
     dependencies:
       safer-buffer: 2.1.2
+    optional: true
 
   icu-minify@4.13.5:
     dependencies:
@@ -10319,7 +10355,8 @@ snapshots:
 
   is-plain-object@5.0.0: {}
 
-  is-potential-custom-element-name@1.0.1: {}
+  is-potential-custom-element-name@1.0.1:
+    optional: true
 
   is-regex@1.2.1:
     dependencies:
@@ -10454,6 +10491,7 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
+    optional: true
 
   jsesc@3.1.0: {}
 
@@ -11020,7 +11058,8 @@ snapshots:
 
   normalize-range@0.1.2: {}
 
-  nwsapi@2.2.23: {}
+  nwsapi@2.2.23:
+    optional: true
 
   object-assign@4.1.1: {}
 
@@ -11181,6 +11220,7 @@ snapshots:
   parse5@7.3.0:
     dependencies:
       entities: 6.0.1
+    optional: true
 
   parseley@0.12.1:
     dependencies:
@@ -11699,9 +11739,11 @@ snapshots:
       '@rollup/rollup-win32-x64-msvc': 4.60.4
       fsevents: 2.3.3
 
-  rrweb-cssom@0.7.1: {}
+  rrweb-cssom@0.7.1:
+    optional: true
 
-  rrweb-cssom@0.8.0: {}
+  rrweb-cssom@0.8.0:
+    optional: true
 
   run-async@2.4.1: {}
 
@@ -11751,6 +11793,7 @@ snapshots:
   saxes@6.0.0:
     dependencies:
       xmlchars: 2.2.0
+    optional: true
 
   scheduler@0.25.0: {}
 
@@ -12116,7 +12159,8 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  symbol-tree@3.2.4: {}
+  symbol-tree@3.2.4:
+    optional: true
 
   tabbable@6.4.0: {}
 
@@ -12197,7 +12241,7 @@ snapshots:
 
   third-party-web@0.26.7: {}
 
-  third-party-web@0.29.2: {}
+  third-party-web@0.30.0: {}
 
   thread-stream@3.1.0:
     dependencies:
@@ -12225,6 +12269,7 @@ snapshots:
   tldts@6.1.86:
     dependencies:
       tldts-core: 6.1.86
+    optional: true
 
   tmp@0.0.33:
     dependencies:
@@ -12261,12 +12306,14 @@ snapshots:
   tough-cookie@5.1.2:
     dependencies:
       tldts: 6.1.86
+    optional: true
 
   tr46@0.0.3: {}
 
   tr46@5.1.1:
     dependencies:
       punycode: 2.3.1
+    optional: true
 
   tree-kill@1.2.2: {}
 
@@ -12498,6 +12545,35 @@ snapshots:
       tsx: 4.22.4
       yaml: 2.9.0
 
+  vitest@4.1.10(@types/node@20.16.11)(happy-dom@15.11.7)(jsdom@25.0.1)(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.19.2)(yaml@2.9.0)):
+    dependencies:
+      '@vitest/expect': 4.1.10
+      '@vitest/mocker': 4.1.10(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.19.2)(yaml@2.9.0))
+      '@vitest/pretty-format': 4.1.10
+      '@vitest/runner': 4.1.10
+      '@vitest/snapshot': 4.1.10
+      '@vitest/spy': 4.1.10
+      '@vitest/utils': 4.1.10
+      es-module-lexer: 2.3.1
+      expect-type: 1.4.0
+      magic-string: 0.30.21
+      obug: 2.1.4
+      pathe: 2.0.3
+      picomatch: 4.0.4
+      std-env: 4.2.0
+      tinybench: 2.9.0
+      tinyexec: 1.3.0
+      tinyglobby: 0.2.16
+      tinyrainbow: 3.1.1
+      vite: 6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.19.2)(yaml@2.9.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 20.16.11
+      happy-dom: 15.11.7
+      jsdom: 25.0.1
+    transitivePeerDependencies:
+      - msw
+
   vitest@4.1.10(@types/node@20.16.11)(happy-dom@15.11.7)(jsdom@25.0.1)(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.10
@@ -12527,36 +12603,7 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.10(@types/node@20.16.11)(happy-dom@20.11.2)(jsdom@25.0.1)(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.19.2)(yaml@2.9.0)):
-    dependencies:
-      '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.19.2)(yaml@2.9.0))
-      '@vitest/pretty-format': 4.1.10
-      '@vitest/runner': 4.1.10
-      '@vitest/snapshot': 4.1.10
-      '@vitest/spy': 4.1.10
-      '@vitest/utils': 4.1.10
-      es-module-lexer: 2.3.1
-      expect-type: 1.4.0
-      magic-string: 0.30.21
-      obug: 2.1.4
-      pathe: 2.0.3
-      picomatch: 4.0.4
-      std-env: 4.2.0
-      tinybench: 2.9.0
-      tinyexec: 1.3.0
-      tinyglobby: 0.2.16
-      tinyrainbow: 3.1.1
-      vite: 6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.19.2)(yaml@2.9.0)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 20.16.11
-      happy-dom: 20.11.2
-      jsdom: 25.0.1
-    transitivePeerDependencies:
-      - msw
-
-  vitest@4.1.10(@types/node@20.16.11)(happy-dom@20.11.2)(jsdom@25.0.1)(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0)):
+  vitest@4.1.10(@types/node@20.16.11)(happy-dom@20.14.5)(jsdom@25.0.1)(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.10
       '@vitest/mocker': 4.1.10(vite@6.4.3(@types/node@20.16.11)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0))
@@ -12580,7 +12627,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 20.16.11
-      happy-dom: 20.11.2
+      happy-dom: 20.14.5
       jsdom: 25.0.1
     transitivePeerDependencies:
       - msw
@@ -12614,7 +12661,7 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.10(@types/node@22.10.2)(happy-dom@20.11.2)(jsdom@25.0.1)(vite@6.4.3(@types/node@22.10.2)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0)):
+  vitest@4.1.10(@types/node@22.10.2)(happy-dom@20.14.5)(jsdom@25.0.1)(vite@6.4.3(@types/node@22.10.2)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.10
       '@vitest/mocker': 4.1.10(vite@6.4.3(@types/node@22.10.2)(jiti@1.21.7)(sass@1.77.4)(tsx@4.22.4)(yaml@2.9.0))
@@ -12638,7 +12685,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.10.2
-      happy-dom: 20.11.2
+      happy-dom: 20.14.5
       jsdom: 25.0.1
     transitivePeerDependencies:
       - msw
@@ -12646,6 +12693,7 @@ snapshots:
   w3c-xmlserializer@5.0.0:
     dependencies:
       xml-name-validator: 5.0.0
+    optional: true
 
   webdriver-bidi-protocol@0.4.1: {}
 
@@ -12675,17 +12723,20 @@ snapshots:
   whatwg-encoding@3.1.1:
     dependencies:
       iconv-lite: 0.6.3
+    optional: true
 
   whatwg-fetch@3.6.20: {}
 
   whatwg-mimetype@3.0.0: {}
 
-  whatwg-mimetype@4.0.0: {}
+  whatwg-mimetype@4.0.0:
+    optional: true
 
   whatwg-url@14.2.0:
     dependencies:
       tr46: 5.1.1
       webidl-conversions: 7.0.0
+    optional: true
 
   whatwg-url@5.0.0:
     dependencies:
@@ -12783,9 +12834,11 @@ snapshots:
 
   xdg-basedir@4.0.0: {}
 
-  xml-name-validator@5.0.0: {}
+  xml-name-validator@5.0.0:
+    optional: true
 
-  xmlchars@2.2.0: {}
+  xmlchars@2.2.0:
+    optional: true
 
   xss@1.0.15:
     dependencies:

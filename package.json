@@ -16,7 +16,7 @@
     "lint": "turbo run lint --cache=local:rw",
     "media:copy": "node --import tsx scripts/copy-media-to-minio.ts",
     "typecheck": "turbo run typecheck --cache=local:rw",
-    "test": "turbo run test --cache=local:rw",
+    "test": "turbo run test --cache=local:rw --concurrency=2",
     "test:e2e": "turbo run test:e2e --cache=local:rw",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md,json,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,md,json,yml,yaml}\""

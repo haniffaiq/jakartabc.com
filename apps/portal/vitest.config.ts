@@ -1,31 +1,10 @@
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vitest/config'
+import { vitestPreset } from '@jakartabc/config/vitest'
 
-export default defineConfig({
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@payload-config': fileURLToPath(new URL('./src/payload.config.ts', import.meta.url)),
-    },
+export default vitestPreset({
+  root: new URL('.', import.meta.url),
+  alias: {
+    '@payload-config': fileURLToPath(new URL('./src/payload.config.ts', import.meta.url)),
   },
-  test: {
-    projects: [
-      {
-        extends: true,
-        test: {
-          name: 'node',
-          environment: 'node',
-          include: ['src/**/*.test.ts'],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: 'dom',
-          environment: 'happy-dom',
-          include: ['src/**/*.test.tsx'],
-        },
-      },
-    ],
-  },
+  passWithNoTests: true,
 })
