@@ -36,5 +36,9 @@ playwright-report
 test-results
 
 # payload
+# Generated on every boot. Portal's config registers only `users`, so letting
+# its copy into the program narrows `CollectionSlug` and breaks typecheck of
+# the shared @jakartabc/content collections (it is excluded in tsconfig too).
 apps/web/src/payload-types.ts
+apps/portal/src/payload-types.ts
 apps/web/uploads
