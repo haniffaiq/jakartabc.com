@@ -77,6 +77,7 @@ export interface Config {
     'booking-leads': BookingLead;
     users: User;
     'payload-kv': PayloadKv;
+    'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
@@ -93,6 +94,7 @@ export interface Config {
     'booking-leads': BookingLeadsSelect<false> | BookingLeadsSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
+    'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
     'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
@@ -117,7 +119,13 @@ export interface Config {
   };
   user: User;
   jobs: {
-    tasks: unknown;
+    tasks: {
+      'revalidate-cache': TaskRevalidateCache;
+      inline: {
+        input: unknown;
+        output: unknown;
+      };
+    };
     workflows: unknown;
   };
 }
@@ -147,6 +155,7 @@ export interface Media {
   id: number;
   alt: string;
   caption?: string | null;
+  prefix?: string | null;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -244,7 +253,6 @@ export interface Insight {
    * Auto-generated from body word count at roughly 200 words per minute.
    */
   estReadTime?: number | null;
-  status: 'draft' | 'published';
   seo?: {
     metaTitle?: string | null;
     metaDescription?: string | null;
@@ -360,6 +368,12 @@ export interface Service {
  */
 export interface ContactMessage {
   id: number;
+  submissionId?: string | null;
+  deliveryStatus: 'pending' | 'sent' | 'failed';
+  deliveryAttempts: number;
+  lastDeliveryAttemptAt?: string | null;
+  deliveredAt?: string | null;
+  deliveryError?: string | null;
   name: string;
   email: string;
   company?: string | null;
@@ -391,6 +405,12 @@ export interface BookingLead {
    * Internal sales notes
    */
   notes?: string | null;
+  submissionId?: string | null;
+  deliveryStatus: 'pending' | 'sent' | 'failed';
+  deliveryAttempts: number;
+  lastDeliveryAttemptAt?: string | null;
+  deliveredAt?: string | null;
+  deliveryError?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -401,7 +421,7 @@ export interface BookingLead {
 export interface User {
   id: number;
   name?: string | null;
-  role?: ('admin' | 'editor' | 'client') | null;
+  role: 'admin' | 'editor' | 'client';
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -437,6 +457,98 @@ export interface PayloadKv {
     | number
     | boolean
     | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs".
+ */
+export interface PayloadJob {
+  id: number;
+  /**
+   * Input data provided to the job
+   */
+  input?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  taskStatus?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  completedAt?: string | null;
+  totalTried?: number | null;
+  /**
+   * If hasError is true this job will not be retried
+   */
+  hasError?: boolean | null;
+  /**
+   * If hasError is true, this is the error that caused it
+   */
+  error?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  /**
+   * Task execution log
+   */
+  log?:
+    | {
+        executedAt: string;
+        completedAt: string;
+        taskSlug: 'inline' | 'revalidate-cache';
+        taskID: string;
+        input?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
+        output?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
+        state: 'failed' | 'succeeded';
+        error?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
+        id?: string | null;
+      }[]
+    | null;
+  taskSlug?: ('inline' | 'revalidate-cache') | null;
+  queue?: string | null;
+  waitUntil?: string | null;
+  processing?: boolean | null;
+  updatedAt: string;
+  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -530,6 +642,7 @@ export interface PayloadMigration {
 export interface MediaSelect<T extends boolean = true> {
   alt?: T;
   caption?: T;
+  prefix?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;
@@ -615,7 +728,6 @@ export interface InsightsSelect<T extends boolean = true> {
   regulationsCited?: T;
   publishedAt?: T;
   estReadTime?: T;
-  status?: T;
   seo?:
     | T
     | {
@@ -701,6 +813,12 @@ export interface ServicesSelect<T extends boolean = true> {
  * via the `definition` "contact-messages_select".
  */
 export interface ContactMessagesSelect<T extends boolean = true> {
+  submissionId?: T;
+  deliveryStatus?: T;
+  deliveryAttempts?: T;
+  lastDeliveryAttemptAt?: T;
+  deliveredAt?: T;
+  deliveryError?: T;
   name?: T;
   email?: T;
   company?: T;
@@ -726,6 +844,12 @@ export interface BookingLeadsSelect<T extends boolean = true> {
   locale?: T;
   status?: T;
   notes?: T;
+  submissionId?: T;
+  deliveryStatus?: T;
+  deliveryAttempts?: T;
+  lastDeliveryAttemptAt?: T;
+  deliveredAt?: T;
+  deliveryError?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -760,6 +884,37 @@ export interface UsersSelect<T extends boolean = true> {
 export interface PayloadKvSelect<T extends boolean = true> {
   key?: T;
   data?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "payload-jobs_select".
+ */
+export interface PayloadJobsSelect<T extends boolean = true> {
+  input?: T;
+  taskStatus?: T;
+  completedAt?: T;
+  totalTried?: T;
+  hasError?: T;
+  error?: T;
+  log?:
+    | T
+    | {
+        executedAt?: T;
+        completedAt?: T;
+        taskSlug?: T;
+        taskID?: T;
+        input?: T;
+        output?: T;
+        state?: T;
+        error?: T;
+        id?: T;
+      };
+  taskSlug?: T;
+  queue?: T;
+  waitUntil?: T;
+  processing?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -946,6 +1101,26 @@ export interface CollectionsWidget {
     [k: string]: unknown;
   };
   width: 'full';
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "TaskRevalidate-cache".
+ */
+export interface TaskRevalidateCache {
+  input: {
+    tags:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+  };
+  output: {
+    revalidatedTagCount: number;
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
