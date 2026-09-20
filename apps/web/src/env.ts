@@ -19,6 +19,16 @@ const turnstileTestSiteKeys = new Set([
   '3x00000000000000000000FF',
 ])
 
+const turnstileKey = (name: string) =>
+  z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z
+      .string()
+      .trim()
+      .min(8, `${name} must be at least 8 chars`)
+      .optional(),
+  )
+
 const Server = z
   .object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -46,10 +56,10 @@ const Server = z
     SMTP_PORT: optionalString,
     SMTP_USER: optionalString,
     SMTP_PASS: optionalString,
-    TURNSTILE_SECRET_KEY: z.string().min(8, 'TURNSTILE_SECRET_KEY must be at least 8 chars'),
-    NEXT_PUBLIC_TURNSTILE_SITE_KEY: z
-      .string()
-      .min(8, 'NEXT_PUBLIC_TURNSTILE_SITE_KEY must be at least 8 chars'),
+    // Turnstile is opt-in. With both keys set the captcha is enforced; with
+    // them unset the widget is not rendered and verification is skipped.
+    TURNSTILE_SECRET_KEY: turnstileKey('TURNSTILE_SECRET_KEY'),
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: turnstileKey('NEXT_PUBLIC_TURNSTILE_SITE_KEY'),
   })
   .refine(
     (env) =>
@@ -59,7 +69,11 @@ const Server = z
     { message: 'Email provider env requirements unmet', path: ['EMAIL_PROVIDER'] },
   )
   .superRefine((env, context) => {
-    if (env.NODE_ENV === 'production' && turnstileTestSecrets.has(env.TURNSTILE_SECRET_KEY)) {
+    if (
+      env.NODE_ENV === 'production' &&
+      env.TURNSTILE_SECRET_KEY !== undefined &&
+      turnstileTestSecrets.has(env.TURNSTILE_SECRET_KEY)
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Turnstile test credential is not allowed in production',
@@ -68,6 +82,7 @@ const Server = z
     }
     if (
       env.NODE_ENV === 'production' &&
+      env.NEXT_PUBLIC_TURNSTILE_SITE_KEY !== undefined &&
       turnstileTestSiteKeys.has(env.NEXT_PUBLIC_TURNSTILE_SITE_KEY)
     ) {
       context.addIssue({
@@ -80,9 +95,7 @@ const Server = z
 
 const Public = z.object({
   NEXT_PUBLIC_SITE_URL: z.string().url(),
-  NEXT_PUBLIC_TURNSTILE_SITE_KEY: z
-    .string()
-    .min(8, 'NEXT_PUBLIC_TURNSTILE_SITE_KEY must be at least 8 chars'),
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: turnstileKey('NEXT_PUBLIC_TURNSTILE_SITE_KEY'),
 })
 
 function formatEnvErrors(error: z.ZodError) {

@@ -41,8 +41,11 @@ async function fillRequiredFields() {
 
 describe('BookingFormWired', () => {
   let randomUUIDMock: ReturnType<typeof vi.spyOn>
+  const originalSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
 
   beforeEach(() => {
+    // The widget only renders when Turnstile is configured.
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = 'configured-site-key'
     submitBookingMock.mockReset()
     turnstileSuccessHandlers.length = 0
     randomUUIDMock = vi
@@ -52,8 +55,32 @@ describe('BookingFormWired', () => {
   })
 
   afterEach(() => {
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = originalSiteKey
     randomUUIDMock.mockRestore()
     cleanup()
+  })
+
+  it('omits the Turnstile widget when no site key is configured', async () => {
+    delete process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+    submitBookingMock.mockResolvedValueOnce({ ok: true })
+
+    const { BookingFormWired } = await import('./BookingFormWired')
+    render(
+      <BookingFormWired
+        labels={labels}
+        services={[{ slug: 'pt-pma-setup', name: 'PT PMA Setup' }]}
+        locale="en"
+        successMessage="Thanks"
+      />,
+    )
+
+    expect(screen.queryByTestId('turnstile')).not.toBeInTheDocument()
+
+    await fillRequiredFields()
+    fireEvent.click(screen.getByRole('button', { name: 'Send request' }))
+
+    await waitFor(() => expect(submitBookingMock).toHaveBeenCalled())
+    expect(submitBookingMock.mock.calls[0]?.[0].get('turnstileToken')).toBe('')
   })
 
   it('submits booking FormData with locale, serviceSlug, and Turnstile token', async () => {

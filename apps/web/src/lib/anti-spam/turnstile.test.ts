@@ -154,14 +154,25 @@ describe('verifyTurnstile', () => {
     expect(consoleWarn).not.toHaveBeenCalled()
   })
 
-  it('returns false without calling the API when the secret is missing', async () => {
+  it('skips verification without calling the API when Turnstile is not configured', async () => {
     delete process.env.TURNSTILE_SECRET_KEY
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
     const { verifyTurnstile } = await import('./turnstile')
 
-    await expect(verifyTurnstile('tok', '1.2.3.4')).resolves.toBe(false)
+    await expect(verifyTurnstile('', '1.2.3.4')).resolves.toBe(true)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('still fails closed on a missing token once a secret is configured', async () => {
+    process.env.TURNSTILE_SECRET_KEY = 'sec'
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { verifyTurnstile } = await import('./turnstile')
+
+    await expect(verifyTurnstile('', '1.2.3.4')).resolves.toBe(false)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

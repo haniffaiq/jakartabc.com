@@ -37,7 +37,7 @@ export function BookingFormWired({
   const [isPending, startTransition] = React.useTransition()
   const submissionIdRef = React.useRef<string | null>(null)
   const isSubmittingRef = React.useRef(false)
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '1x00000000000000000000AA'
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
 
   const setTurnstileToken = React.useCallback((token: string) => {
     turnstileTokenRef.current = token
@@ -94,7 +94,7 @@ export function BookingFormWired({
           })
         }}
       />
-      {state === 'success' ? null : (
+      {state === 'success' || !siteKey ? null : (
         <div className="mt-24">
           <Turnstile
             key={turnstileKey}

@@ -156,9 +156,20 @@ describe('env schema', () => {
     )
   })
 
-  it('rejects missing Turnstile keys', async () => {
+  it('accepts missing Turnstile keys and reports the captcha as disabled', async () => {
     setValidEnv({ TURNSTILE_SECRET_KEY: '', NEXT_PUBLIC_TURNSTILE_SITE_KEY: '' })
 
-    await expect(importEnvCase('missing-turnstile')).rejects.toThrow(/TURNSTILE/)
+    const mod = await importEnvCase('missing-turnstile')
+
+    expect(mod.env.TURNSTILE_SECRET_KEY).toBeUndefined()
+    expect(mod.publicEnv.NEXT_PUBLIC_TURNSTILE_SITE_KEY).toBeUndefined()
+  })
+
+  it('still rejects a Turnstile key that is present but too short', async () => {
+    setValidEnv({ NEXT_PUBLIC_TURNSTILE_SITE_KEY: 'short' })
+
+    await expect(importEnvCase('short-turnstile')).rejects.toThrow(
+      /NEXT_PUBLIC_TURNSTILE_SITE_KEY/,
+    )
   })
 })

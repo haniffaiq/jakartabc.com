@@ -9,7 +9,14 @@ type TurnstileResponse = {
 export async function verifyTurnstile(token: string, remoteip: string): Promise<boolean> {
   const secret = process.env.TURNSTILE_SECRET_KEY
 
-  if (!secret || !token) {
+  // Turnstile not configured: the widget is not rendered, so no token is
+  // submitted and there is nothing to verify. Once a secret is set the check
+  // below still fails closed on a missing or rejected token.
+  if (!secret) {
+    return true
+  }
+
+  if (!token) {
     return false
   }
 
